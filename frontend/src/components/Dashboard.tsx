@@ -30,7 +30,6 @@ interface DashboardProps {
   onQuickAction: (action: string) => void;
   userName: string;
   transcriptFeedback?: string;
-  onDirectPrompt?: (prompt: string) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -46,12 +45,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigate,
   onQuickAction,
   userName,
-  transcriptFeedback,
-  onDirectPrompt
+  transcriptFeedback
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
-  const [quickInput, setQuickInput] = useState<string>('');
 
   useEffect(() => {
     const updateTime = () => {
@@ -64,93 +61,83 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  const handleQuickSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (quickInput.trim() && onDirectPrompt) {
-      onDirectPrompt(quickInput.trim());
-      setQuickInput('');
-    }
-  };
-
   const pendingTasks = tasks.filter(t => t.status === 'pending');
   const upcomingReminders = reminders.filter(r => r.status === 'pending');
 
   return (
-    <div className="h-full overflow-y-auto px-8 py-6 space-y-8">
-      {/* 1. Header / Welcome Section */}
+    <div className="h-full overflow-y-auto px-10 py-8 flex flex-col justify-between max-w-7xl mx-auto space-y-6">
+      {/* 1. Top Bar */}
       <motion.div 
-        initial={{ opacity: 0, y: 15 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="flex flex-col md:flex-row md:items-end justify-between border-b border-[#E8DCCD] pb-6 gap-4"
+        className="flex items-center justify-between pb-5 border-b border-[#E8DCCD]"
       >
         <div>
-          <span className="text-xs font-bold tracking-widest uppercase text-[#D97745] bg-[#F4E1D2] px-3 py-1 rounded-full">
-            Intelligent AI Workspace
+          <span className="text-[11px] font-bold tracking-widest uppercase text-[#D97745] bg-[#F4E1D2] px-3 py-1 rounded-full">
+            Bilingual Intelligent System
           </span>
-          <h1 className="font-serif-display text-4xl font-bold text-[#29241F] mt-2 tracking-tight">
+          <h1 className="font-serif-display text-3xl font-bold text-[#29241F] mt-2 tracking-tight">
             Good day, {userName}
           </h1>
-          <p className="text-sm text-[#81766B] mt-1">
-            Echo is active, listening and ready to assist you in English and Kannada.
+          <p className="text-xs text-[#81766B] mt-0.5">
+            Voice ready in English and Kannada. Tap to speak anytime.
           </p>
         </div>
 
-        <div className="flex items-center gap-6 text-[#81766B] bg-[#FFFDF9] border border-[#E8DCCD] px-5 py-3 rounded-2xl shadow-xs">
+        <div className="flex items-center gap-5 text-[#81766B] bg-[#FFFDF9] border border-[#E8DCCD] px-5 py-2.5 rounded-2xl shadow-xs">
           <div className="flex items-center gap-2">
-            <Clock size={16} className="text-[#D97745]" />
+            <Clock size={15} className="text-[#D97745]" />
             <span className="text-sm font-semibold text-[#29241F]">{currentTime}</span>
           </div>
-          <div className="h-4 w-px bg-[#E8DCCD]" />
+          <div className="h-3.5 w-px bg-[#E8DCCD]" />
           <div className="flex items-center gap-2">
-            <Calendar size={16} className="text-[#D97745]" />
+            <Calendar size={15} className="text-[#D97745]" />
             <span className="text-sm font-semibold text-[#29241F]">{currentDate}</span>
           </div>
         </div>
       </motion.div>
 
-      {/* 2. Central Hero: Signature Echo Orb Visualizer */}
+      {/* 2. Central Hero: Signature Visualizer & Voice Button */}
       <motion.div 
-        initial={{ opacity: 0, scale: 0.98 }}
+        initial={{ opacity: 0, scale: 0.99 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="bg-gradient-to-b from-[#FFFDF9] to-[#F8F1E7] border border-[#E8DCCD] rounded-3xl p-8 flex flex-col items-center justify-center relative overflow-hidden shadow-xs"
+        className="bg-gradient-to-b from-[#FFFDF9] to-[#F8F1E7] border border-[#E8DCCD] rounded-3xl p-8 flex flex-col items-center justify-center relative shadow-xs"
       >
-        <div className="absolute top-6 left-8 flex items-center gap-2">
+        <div className="absolute top-5 left-7 flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D97745] opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#D97745]"></span>
           </span>
           <span className="text-xs font-semibold uppercase tracking-wider text-[#81766B]">
-            {visualizerState === 'listening' ? 'Listening...' : visualizerState === 'speaking' ? 'Speaking...' : visualizerState === 'processing' ? 'Thinking...' : 'Ready'}
+            {visualizerState === 'listening' ? 'Listening...' : visualizerState === 'speaking' ? 'Echo Speaking...' : visualizerState === 'processing' ? 'Thinking...' : 'Echo Ready'}
           </span>
         </div>
 
-        {/* Clean Original Visualizer */}
-        <div className="my-4">
+        {/* Central Orb */}
+        <div className="my-3">
           <AssistantVisualizer 
             state={visualizerState} 
-            size={240} 
+            size={250} 
             onMicClick={isListening ? onStopVoice : onStartVoice}
           />
         </div>
 
-        {/* Live Audio Transcript Feedback Banner */}
+        {/* Feedback Banner */}
         {transcriptFeedback && (
           <motion.div 
-            initial={{ opacity: 0, y: 5 }}
+            initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-4 px-5 py-2.5 bg-[#F4E1D2] border border-[#D97745]/30 rounded-xl text-xs font-medium text-[#B95F38] text-center max-w-lg shadow-xs"
+            className="mb-4 px-5 py-2 bg-[#F4E1D2] border border-[#D97745]/30 rounded-xl text-xs font-medium text-[#B95F38] text-center max-w-md shadow-xs"
           >
             {transcriptFeedback}
           </motion.div>
         )}
 
-        {/* Controls Ribbon */}
-        <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
+        {/* Voice Trigger Buttons */}
+        <div className="flex items-center gap-4 mt-2">
           <button
             onClick={isListening ? onStopVoice : onStartVoice}
-            className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl font-medium text-sm transition-all duration-300 shadow-md cursor-pointer ${
+            className={`flex items-center gap-2.5 px-7 py-3 rounded-2xl font-medium text-sm transition-all duration-300 shadow-sm cursor-pointer ${
               isListening
                 ? 'bg-[#B95F38] text-white hover:bg-[#A04F2E] animate-pulse ring-4 ring-[#D97745]/30'
                 : 'bg-[#D97745] text-white hover:bg-[#C26535]'
@@ -161,30 +148,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
 
           <button
-            onClick={() => onNavigate('assistant')}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl font-medium text-sm bg-[#FFFDF9] border border-[#E8DCCD] text-[#29241F] hover:bg-[#EFE3D3] transition-colors cursor-pointer"
+            onClick={() => onNavigate('chat')}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl font-medium text-sm bg-[#FFFDF9] border border-[#E8DCCD] text-[#29241F] hover:bg-[#EFE3D3] transition-colors cursor-pointer"
           >
             <Sparkles size={16} className="text-[#D97745]" />
-            <span>Interactive Chat</span>
+            <span>Open Chat</span>
           </button>
         </div>
-
-        {/* Quick Voice / Text Command Bar on Dashboard */}
-        <form onSubmit={handleQuickSubmit} className="w-full max-w-md mt-6 flex items-center gap-2">
-          <input
-            type="text"
-            value={quickInput}
-            onChange={(e) => setQuickInput(e.target.value)}
-            placeholder="Type a voice command or question here..."
-            className="flex-1 bg-[#F8F1E7] border border-[#E8DCCD] rounded-xl px-4 py-2.5 text-xs text-[#29241F] placeholder-[#81766B] focus:outline-none focus:border-[#D97745] transition-colors"
-          />
-          <button
-            type="submit"
-            className="px-4 py-2.5 bg-[#D97745] hover:bg-[#C26535] text-white rounded-xl text-xs font-medium transition-all shadow-xs"
-          >
-            Ask Echo
-          </button>
-        </form>
       </motion.div>
 
       {/* 3. Quick Actions Ribbon */}
@@ -199,19 +169,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
           return (
             <motion.button
               key={item.label}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 + idx * 0.05 }}
+              transition={{ delay: 0.1 + idx * 0.04 }}
               onClick={() => onQuickAction(item.action)}
               className="flex items-center justify-between p-4 bg-[#FFFDF9] border border-[#E8DCCD] rounded-2xl hover:border-[#D97745] hover:shadow-xs transition-all text-left group cursor-pointer"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-[#F4E1D2] text-[#D97745] group-hover:bg-[#D97745] group-hover:text-white transition-colors">
+                <div className="p-2 rounded-xl bg-[#F4E1D2] text-[#D97745] group-hover:bg-[#D97745] group-hover:text-white transition-colors">
                   <Icon size={18} />
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-[#29241F] leading-tight">{item.label}</h4>
-                  <p className="text-xs text-[#81766B]">{item.desc}</p>
+                  <p className="text-[11px] text-[#81766B]">{item.desc}</p>
                 </div>
               </div>
               <ArrowUpRight size={16} className="text-[#81766B] group-hover:text-[#D97745] transition-colors" />
@@ -220,28 +190,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
         })}
       </div>
 
-      {/* 4. Productivity & Real Database Data Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* 4. Productivity & Real Telemetry Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pb-2">
         {/* Pending Tasks */}
         <div className="bg-[#FFFDF9] border border-[#E8DCCD] rounded-2xl p-5 flex flex-col justify-between shadow-xs">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-serif-display text-lg font-bold text-[#29241F]">Pending Tasks</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-serif-display text-base font-bold text-[#29241F]">Pending Tasks</h3>
               <button onClick={() => onNavigate('tasks')} className="text-xs font-semibold text-[#D97745] hover:underline cursor-pointer">
                 View All ({pendingTasks.length})
               </button>
             </div>
             {pendingTasks.length === 0 ? (
-              <p className="text-xs text-[#81766B] py-6 text-center italic">No pending tasks. You are all caught up!</p>
+              <p className="text-xs text-[#81766B] py-5 text-center italic">No pending tasks.</p>
             ) : (
-              <div className="space-y-2.5">
-                {pendingTasks.slice(0, 3).map((task) => (
-                  <div key={task.id} className="p-3 bg-[#F8F1E7]/60 rounded-xl border border-[#E8DCCD]/80 flex items-center justify-between">
+              <div className="space-y-2">
+                {pendingTasks.slice(0, 2).map((task) => (
+                  <div key={task.id} className="p-2.5 bg-[#F8F1E7]/60 rounded-xl border border-[#E8DCCD]/80 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-[#29241F] line-clamp-1">{task.title}</p>
-                      <span className="text-[10px] uppercase font-bold text-[#D97745]">{task.priority} Priority</span>
+                      <p className="text-xs font-semibold text-[#29241F] line-clamp-1">{task.title}</p>
+                      <span className="text-[9px] uppercase font-bold text-[#D97745]">{task.priority} Priority</span>
                     </div>
-                    <span className="text-xs text-[#81766B]">{task.due_date || 'No due date'}</span>
+                    <span className="text-[11px] text-[#81766B]">{task.due_date || 'Today'}</span>
                   </div>
                 ))}
               </div>
@@ -249,23 +219,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Upcoming Reminders */}
+        {/* Reminders */}
         <div className="bg-[#FFFDF9] border border-[#E8DCCD] rounded-2xl p-5 flex flex-col justify-between shadow-xs">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-serif-display text-lg font-bold text-[#29241F]">Reminders</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-serif-display text-base font-bold text-[#29241F]">Reminders</h3>
               <button onClick={() => onNavigate('reminders')} className="text-xs font-semibold text-[#D97745] hover:underline cursor-pointer">
                 View All ({upcomingReminders.length})
               </button>
             </div>
             {upcomingReminders.length === 0 ? (
-              <p className="text-xs text-[#81766B] py-6 text-center italic">No upcoming reminders set.</p>
+              <p className="text-xs text-[#81766B] py-5 text-center italic">No upcoming reminders.</p>
             ) : (
-              <div className="space-y-2.5">
-                {upcomingReminders.slice(0, 3).map((rem) => (
-                  <div key={rem.id} className="p-3 bg-[#F8F1E7]/60 rounded-xl border border-[#E8DCCD]/80 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#29241F] line-clamp-1">{rem.title}</p>
-                    <span className="text-xs font-medium text-[#B95F38] bg-[#F4E1D2] px-2 py-0.5 rounded-md">
+              <div className="space-y-2">
+                {upcomingReminders.slice(0, 2).map((rem) => (
+                  <div key={rem.id} className="p-2.5 bg-[#F8F1E7]/60 rounded-xl border border-[#E8DCCD]/80 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-[#29241F] line-clamp-1">{rem.title}</p>
+                    <span className="text-[10px] font-medium text-[#B95F38] bg-[#F4E1D2] px-2 py-0.5 rounded-md">
                       {rem.remind_at}
                     </span>
                   </div>
@@ -275,24 +245,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* System Telemetry */}
+        {/* Live Telemetry */}
         <div className="bg-[#FFFDF9] border border-[#E8DCCD] rounded-2xl p-5 flex flex-col justify-between shadow-xs">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-serif-display text-lg font-bold text-[#29241F]">Live Telemetry</h3>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-serif-display text-base font-bold text-[#29241F]">Live Telemetry</h3>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
                 Active
               </span>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div>
                 <div className="flex justify-between text-xs font-semibold text-[#81766B] mb-1">
-                  <span className="flex items-center gap-1.5"><Cpu size={14} className="text-[#D97745]" /> CPU Load</span>
+                  <span className="flex items-center gap-1.5"><Cpu size={13} className="text-[#D97745]" /> CPU Load</span>
                   <span className="text-[#29241F]">{telemetry?.cpu?.usage_percent || 0}%</span>
                 </div>
-                <div className="w-full bg-[#EFE3D3] rounded-full h-2">
+                <div className="w-full bg-[#EFE3D3] rounded-full h-1.5">
                   <div 
-                    className="bg-[#D97745] h-2 rounded-full transition-all duration-500" 
+                    className="bg-[#D97745] h-1.5 rounded-full transition-all duration-500" 
                     style={{ width: `${Math.min(telemetry?.cpu?.usage_percent || 0, 100)}%` }}
                   />
                 </div>
@@ -300,20 +270,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               <div>
                 <div className="flex justify-between text-xs font-semibold text-[#81766B] mb-1">
-                  <span className="flex items-center gap-1.5"><HardDrive size={14} className="text-[#D97745]" /> RAM Usage</span>
+                  <span className="flex items-center gap-1.5"><HardDrive size={13} className="text-[#D97745]" /> RAM Usage</span>
                   <span className="text-[#29241F]">{telemetry?.memory?.percent || 0}%</span>
                 </div>
-                <div className="w-full bg-[#EFE3D3] rounded-full h-2">
+                <div className="w-full bg-[#EFE3D3] rounded-full h-1.5">
                   <div 
-                    className="bg-[#B95F38] h-2 rounded-full transition-all duration-500" 
+                    className="bg-[#B95F38] h-1.5 rounded-full transition-all duration-500" 
                     style={{ width: `${Math.min(telemetry?.memory?.percent || 0, 100)}%` }}
                   />
                 </div>
-              </div>
-
-              <div className="pt-2 border-t border-[#E8DCCD] flex justify-between text-xs text-[#81766B]">
-                <span>Cores: {telemetry?.cpu?.cores || 4}</span>
-                <span>Memory: {telemetry?.memory?.used_gb || 0}GB / {telemetry?.memory?.total_gb || 16}GB</span>
               </div>
             </div>
           </div>

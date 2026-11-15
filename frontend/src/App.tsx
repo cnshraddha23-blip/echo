@@ -142,7 +142,7 @@ export const App: React.FC = () => {
         if (errString.includes("not-allowed")) {
           setTranscriptFeedback("Microphone permission denied. Allow mic access in your browser bar.");
         } else if (errString.includes("no-speech")) {
-          setTranscriptFeedback("No speech detected. Tap again or type in the input box.");
+          setTranscriptFeedback("No speech detected. Tap to speak again.");
         } else {
           setTranscriptFeedback("Tap to speak again.");
         }
@@ -180,6 +180,7 @@ export const App: React.FC = () => {
     } finally {
       setIsSpeaking(false);
       setVisualizerState('idle');
+      setTranscriptFeedback('');
       isExecutingRef.current = false;
     }
   };
@@ -221,6 +222,7 @@ export const App: React.FC = () => {
     }
   };
 
+  // Typed Chat Send Handler
   const handleSendMessage = async (text: string) => {
     const cleanText = text.trim();
     if (!cleanText) return;
@@ -293,7 +295,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#F8F1E7]">
-      {/* Sidebar Navigation */}
+      {/* Sidebar Navigation (Clean list without AI Assistant duplication) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -319,11 +321,10 @@ export const App: React.FC = () => {
             onQuickAction={handleQuickAction}
             userName={userName}
             transcriptFeedback={transcriptFeedback}
-            onDirectPrompt={handleVoiceCommand}
           />
         )}
 
-        {(activeTab === 'assistant' || activeTab === 'chat') && (
+        {activeTab === 'chat' && (
           <ChatInterface
             messages={messages}
             onSendMessage={handleSendMessage}
