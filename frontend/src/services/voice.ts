@@ -1,4 +1,4 @@
-// Robust Web Speech API implementation for Chrome, Edge, and all Chromium browsers
+// Bulletproof Browser Voice Recognition with immediate media stream permission checks
 export class BrowserVoiceRecognition {
   private recognition: any = null;
   public isListening = false;
@@ -25,7 +25,7 @@ export class BrowserVoiceRecognition {
     return Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   }
 
-  public startListening(
+  public async startListening(
     language: string,
     onResult: (text: string) => void,
     onError: (err: any) => void,
@@ -40,7 +40,19 @@ export class BrowserVoiceRecognition {
       return;
     }
 
-    // Abort any existing session cleanly
+    // Force prompt browser permission if needed
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Stop audio tracks after permission check
+        stream.getTracks().forEach(track => track.stop());
+      }
+    } catch (permErr: any) {
+      console.warn("[MediaDevices permission error]:", permErr);
+      onError("not-allowed");
+      return;
+    }
+
     try {
       this.recognition.abort();
     } catch (e) {}
@@ -50,14 +62,12 @@ export class BrowserVoiceRecognition {
 
     this.recognition.onstart = () => {
       this.isListening = true;
-      console.log("[Web Speech API] Listening started...");
     };
 
     this.recognition.onresult = (event: any) => {
       this.isListening = false;
       if (event.results && event.results[0] && event.results[0][0]) {
         const transcript = event.results[0][0].transcript;
-        console.log("[Web Speech API Result]:", transcript);
         if (transcript && transcript.trim()) {
           onResult(transcript.trim());
         }
@@ -66,13 +76,11 @@ export class BrowserVoiceRecognition {
 
     this.recognition.onerror = (event: any) => {
       this.isListening = false;
-      console.warn("[Web Speech API Error Event]:", event.error);
-      onError(event.error || "Speech recognition error");
+      onError(event.error || "error");
     };
 
     this.recognition.onend = () => {
       this.isListening = false;
-      console.log("[Web Speech API] Listening ended.");
       onEnd();
     };
 
@@ -80,7 +88,6 @@ export class BrowserVoiceRecognition {
       this.recognition.start();
     } catch (e) {
       this.isListening = false;
-      console.error("[Web Speech API Start Exception]:", e);
       onError(e);
     }
   }
@@ -101,6 +108,7 @@ export class BrowserVoiceRecognition {
 
 export const browserVoice = new BrowserVoiceRecognition();
 
+// Native browser text-to-speech engine
 export function speakBrowserSpeech(text: string, language = 'en-IN'): Promise<void> {
   return new Promise((resolve) => {
     if (!('speechSynthesis' in window)) {
@@ -124,14 +132,10 @@ export function speakBrowserSpeech(text: string, language = 'en-IN'): Promise<vo
       }
 
       utterance.onend = () => resolve();
-      utterance.onerror = (e) => {
-        console.warn("[SpeechSynthesisUtterance Error]:", e);
-        resolve();
-      };
+      utterance.onerror = () => resolve();
 
       window.speechSynthesis.speak(utterance);
     } catch (e) {
-      console.error("[Speech Error]:", e);
       resolve();
     }
   });
