@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { ChatInterface } from './components/ChatInterface';
@@ -22,6 +22,11 @@ export const App: React.FC = () => {
   const [activeLanguage, setActiveLanguage] = useState<string>('en-IN');
   const [userName, setUserName] = useState<string>('Shraddha');
   const [transcriptFeedback, setTranscriptFeedback] = useState<string>('');
+
+  // Lock refs to prevent duplicate message handling and double speech loops
+  const isHandlingMessageRef = useRef<boolean>(false);
+  const lastProcessedTextRef = useRef<string>('');
+  const lastProcessedTimeRef = useRef<number>(0);
 
   // Database Data States
   const [messages, setMessages] = useState<Message[]>([]);
@@ -70,7 +75,7 @@ export const App: React.FC = () => {
     return () => clearInterval(telemetryInterval);
   }, []);
 
-  // 2. Real-Time Socket.IO Synchronization
+  // 2. Real-Time Socket.IO Synchronization (Only update UI state, don't trigger duplicate speech)
   useEffect(() => {
     socket.on('connect', () => {
       setIsConnected(true);
@@ -113,18 +118,6 @@ export const App: React.FC = () => {
       if (!isSpeaking) setVisualizerState('idle');
     });
 
-    socket.on('speech_recognized', async (data: { text: string; language: string }) => {
-      console.log("[SocketIO] Speech recognized:", data.text);
-      setTranscriptFeedback(`Heard: "${data.text}"`);
-      setTimeout(() => setTranscriptFeedback(''), 4000);
-      handleSendMessage(data.text);
-    });
-
-    socket.on('assistant_response', async () => {
-      const updated = await api.getMessages('default');
-      setMessages(updated?.messages || []);
-    });
-
     socket.on('notes_updated', async () => {
       const updatedNotes = await api.getNotes();
       setNotes(updatedNotes || []);
@@ -153,8 +146,6 @@ export const App: React.FC = () => {
       socket.off('assistant_stopped');
       socket.off('processing_started');
       socket.off('processing_finished');
-      socket.off('speech_recognized');
-      socket.off('assistant_response');
       socket.off('notes_updated');
       socket.off('tasks_updated');
       socket.off('reminders_updated');
@@ -164,6 +155,12 @@ export const App: React.FC = () => {
 
   // 3. User Voice Interaction
   const handleStartVoice = () => {
+    // If Echo is currently speaking, stop it first before listening
+    if (isSpeaking) {
+      handleStopVoice();
+      return;
+    }
+
     setIsListening(true);
     setVisualizerState('listening');
     setTranscriptFeedback("Listening to your voice... Speak now.");
@@ -178,17 +175,15 @@ export const App: React.FC = () => {
           setIsListening(false);
           setVisualizerState('processing');
           setTranscriptFeedback(`Heard: "${finalTranscript}"`);
+          setTimeout(() => setTranscriptFeedback(''), 3000);
           handleSendMessage(finalTranscript);
         },
         (error) => {
           console.warn("[Browser Speech Notice]:", error);
-          // Fallback to backend microphone
-          api.startVoice(activeLanguage).catch(() => {
-            setIsListening(false);
-            setVisualizerState('idle');
-            setTranscriptFeedback("Microphone capture ended.");
-            setTimeout(() => setTranscriptFeedback(''), 2500);
-          });
+          setIsListening(false);
+          setVisualizerState('idle');
+          setTranscriptFeedback("Microphone capture ended.");
+          setTimeout(() => setTranscriptFeedback(''), 2500);
         },
         () => {
           setIsListening(false);
@@ -223,35 +218,48 @@ export const App: React.FC = () => {
     setIsSpeaking(true);
     setVisualizerState('speaking');
     try {
-      // 1. Play via browser native speech synthesis for zero-delay audible voice
-      speakBrowserSpeech(text, activeLanguage);
-      // 2. Also trigger backend high-quality neural voice
-      api.speakText(text, activeLanguage).catch(() => {});
+      // Single voice audio source via browser speech synthesis to prevent echo/repeating
+      await speakBrowserSpeech(text, activeLanguage);
     } catch (e) {
       console.error("Speak error:", e);
     } finally {
-      setTimeout(() => {
-        setIsSpeaking(false);
-        setVisualizerState('idle');
-      }, Math.max(2000, text.length * 70));
+      setIsSpeaking(false);
+      setVisualizerState('idle');
     }
   };
 
   const handleSendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    // Deduplication check: ignore if identical message was sent within 1.5 seconds
+    const now = Date.now();
+    if (
+      isHandlingMessageRef.current ||
+      (lastProcessedTextRef.current === cleanText && now - lastProcessedTimeRef.current < 1500)
+    ) {
+      console.log("[App] Deduplicating message trigger:", cleanText);
+      return;
+    }
+
+    isHandlingMessageRef.current = true;
+    lastProcessedTextRef.current = cleanText;
+    lastProcessedTimeRef.current = now;
+
     setIsProcessing(true);
     setVisualizerState('processing');
 
     const optimisticUserMsg: Message = {
       conversation_id: 'default',
       role: 'user',
-      content: text,
+      content: cleanText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setMessages(prev => [...prev, optimisticUserMsg]);
 
     try {
-      const res = await api.sendMessage(text, 'default', activeLanguage, true);
+      // Speak response is handled on client only (speak_response: false to backend)
+      const res = await api.sendMessage(cleanText, 'default', activeLanguage, false);
       
       const assistantMsg: Message = {
         conversation_id: 'default',
@@ -261,7 +269,7 @@ export const App: React.FC = () => {
       };
       setMessages(prev => [...prev, assistantMsg]);
 
-      // Speak back the response immediately with voice
+      // Speak response exactly once
       if (res.response) {
         handleSpeakText(res.response);
       }
@@ -276,6 +284,7 @@ export const App: React.FC = () => {
       setTimeout(() => setVisualizerState('idle'), 2000);
     } finally {
       setIsProcessing(false);
+      isHandlingMessageRef.current = false;
     }
   };
 
