@@ -2,19 +2,20 @@
 
 @layer base {
   :root {
-    --bg-primary: #F8F1E7;
-    --bg-secondary: #EFE3D3;
-    --accent-primary: #D97745;
-    --accent-secondary: #B95F38;
-    --text-primary: #29241F;
-    --text-secondary: #81766B;
-    --card-bg: #FFFDF9;
-    --border-color: #E8DCCD;
-    --soft-orange: #F4E1D2;
-    --dark-theme-bg: #302820;
+    --bg-primary: #EBE3D5;       /* Warm Classic Beige */
+    --bg-secondary: #DFD7C7;     /* Deeper Sand Beige */
+    --card-bg: #F5EFE6;          /* Soft Light Beige Canvas */
+    --border-color: #D3C7B5;     /* Refined Beige Border */
+    --accent-primary: #C27038;   /* Warm Terracotta Ochre */
+    --accent-secondary: #9E5224; /* Deep Rust Amber */
+    --soft-accent: #E8D5C4;      /* Soft Muted Sand */
+    --text-primary: #2B2620;     /* Deep Espresso Charcoal */
+    --text-secondary: #786C60;   /* Muted Earth Tone */
   }
 
   body {
+    background-color: #EBE3D5;
+    color: #2B2620;
     font-family: 'Inter', 'Manrope', system-ui, sans-serif;
   }
 
@@ -23,7 +24,7 @@
   }
 }
 
-/* Custom smooth scrollbar */
+/* Custom Beige Aesthetic Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -32,9 +33,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #E8DCCD;
+  background: #D3C7B5;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #D97745;
+  background: #C27038;
 }
