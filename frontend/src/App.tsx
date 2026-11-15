@@ -6,7 +6,7 @@ import { ProductivityPanel } from './components/ProductivityPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AboutPanel } from './components/AboutPanel';
 import { api, socket } from './services/api';
-import { browserVoice } from './services/voice';
+import { browserVoice, speakBrowserSpeech } from './services/voice';
 import { Note, Task, Reminder, SystemTelemetry, Message, AssistantVisualizerState } from './types';
 
 export const App: React.FC = () => {
@@ -60,14 +60,11 @@ export const App: React.FC = () => {
 
     fetchInitialData();
 
-    // Telemetry polling every 5 seconds
     const telemetryInterval = setInterval(async () => {
       try {
         const t = await api.getSystemInfo();
         setTelemetry(t);
-      } catch (e) {
-        // Handled silently
-      }
+      } catch (e) {}
     }, 5000);
 
     return () => clearInterval(telemetryInterval);
@@ -165,7 +162,7 @@ export const App: React.FC = () => {
     };
   }, [isSpeaking, visualizerState]);
 
-  // 3. Robust Hybrid Voice Trigger: Browser Web Speech API with Python Backend Fallback
+  // 3. User Voice Interaction
   const handleStartVoice = () => {
     setIsListening(true);
     setVisualizerState('listening');
@@ -174,22 +171,23 @@ export const App: React.FC = () => {
     if (browserVoice.isSupported()) {
       browserVoice.startListening(
         activeLanguage,
-        (transcript) => {
+        (interimText) => {
+          setTranscriptFeedback(`Listening: "${interimText}"`);
+        },
+        (finalTranscript) => {
           setIsListening(false);
           setVisualizerState('processing');
-          setTranscriptFeedback(`Heard: "${transcript}"`);
-          setTimeout(() => setTranscriptFeedback(''), 3000);
-          handleSendMessage(transcript);
+          setTranscriptFeedback(`Heard: "${finalTranscript}"`);
+          handleSendMessage(finalTranscript);
         },
         (error) => {
-          console.warn("[Browser Voice Error, falling back to backend mic]:", error);
-          // Fallback to Python PyAudio microphone capture
-          api.startVoice(activeLanguage).catch((e) => {
-            console.error("Backend voice failed:", e);
+          console.warn("[Browser Speech Notice]:", error);
+          // Fallback to backend microphone
+          api.startVoice(activeLanguage).catch(() => {
             setIsListening(false);
             setVisualizerState('idle');
-            setTranscriptFeedback("Microphone access unavailable.");
-            setTimeout(() => setTranscriptFeedback(''), 3000);
+            setTranscriptFeedback("Microphone capture ended.");
+            setTimeout(() => setTranscriptFeedback(''), 2500);
           });
         },
         () => {
@@ -198,9 +196,8 @@ export const App: React.FC = () => {
         }
       );
     } else {
-      // Direct Python Backend Microphone trigger
       api.startVoice(activeLanguage).catch((e) => {
-        console.error("Backend voice failed:", e);
+        console.error("Backend voice start failed:", e);
         setIsListening(false);
         setVisualizerState('idle');
       });
@@ -209,13 +206,34 @@ export const App: React.FC = () => {
 
   const handleStopVoice = async () => {
     browserVoice.stopListening();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
     setIsListening(false);
+    setIsSpeaking(false);
     setVisualizerState('idle');
     setTranscriptFeedback('');
     try {
+      await api.stopSpeaking();
       await api.stopVoice();
-    } catch (err) {
-      console.error("Failed to stop voice:", err);
+    } catch (err) {}
+  };
+
+  const handleSpeakText = async (text: string) => {
+    setIsSpeaking(true);
+    setVisualizerState('speaking');
+    try {
+      // 1. Play via browser native speech synthesis for zero-delay audible voice
+      speakBrowserSpeech(text, activeLanguage);
+      // 2. Also trigger backend high-quality neural voice
+      api.speakText(text, activeLanguage).catch(() => {});
+    } catch (e) {
+      console.error("Speak error:", e);
+    } finally {
+      setTimeout(() => {
+        setIsSpeaking(false);
+        setVisualizerState('idle');
+      }, Math.max(2000, text.length * 70));
     }
   };
 
@@ -233,7 +251,6 @@ export const App: React.FC = () => {
     setMessages(prev => [...prev, optimisticUserMsg]);
 
     try {
-      // Send to backend with speak_response=true
       const res = await api.sendMessage(text, 'default', activeLanguage, true);
       
       const assistantMsg: Message = {
@@ -244,14 +261,11 @@ export const App: React.FC = () => {
       };
       setMessages(prev => [...prev, assistantMsg]);
 
-      // If speech synthesis is requested, play audio
+      // Speak back the response immediately with voice
       if (res.response) {
-        setIsSpeaking(true);
-        setVisualizerState('speaking');
-        api.speakText(res.response, activeLanguage).catch(() => {});
+        handleSpeakText(res.response);
       }
 
-      // Refresh notes/tasks if command created one
       if (res.action === 'create_note') {
         const updatedNotes = await api.getNotes();
         setNotes(updatedNotes || []);
@@ -262,9 +276,6 @@ export const App: React.FC = () => {
       setTimeout(() => setVisualizerState('idle'), 2000);
     } finally {
       setIsProcessing(false);
-      setTimeout(() => {
-        if (!isSpeaking) setVisualizerState('idle');
-      }, 1500);
     }
   };
 
@@ -337,7 +348,7 @@ export const App: React.FC = () => {
             onStartVoice={handleStartVoice}
             onStopVoice={handleStopVoice}
             isListening={isListening}
-            onSpeakText={(text) => api.speakText(text, activeLanguage)}
+            onSpeakText={handleSpeakText}
           />
         )}
 
