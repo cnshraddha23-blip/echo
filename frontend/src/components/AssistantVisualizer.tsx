@@ -9,16 +9,13 @@ interface VisualizerProps {
 }
 
 export const AssistantVisualizer: React.FC<VisualizerProps> = ({ state, size = 260, onMicClick }) => {
-  // Color configuration according to palette
-  // #D97745 (Primary accent), #B95F38 (Secondary accent), #F4E1D2 (Soft orange)
-  
   const getGlowColor = () => {
     switch (state) {
-      case 'listening': return 'rgba(217, 119, 69, 0.45)';
-      case 'processing': return 'rgba(185, 95, 56, 0.5)';
-      case 'speaking': return 'rgba(217, 119, 69, 0.6)';
-      case 'error': return 'rgba(239, 68, 68, 0.5)';
-      default: return 'rgba(217, 119, 69, 0.2)';
+      case 'listening': return 'rgba(224, 122, 68, 0.65)';
+      case 'processing': return 'rgba(200, 98, 47, 0.7)';
+      case 'speaking': return 'rgba(224, 122, 68, 0.85)';
+      case 'error': return 'rgba(239, 68, 68, 0.7)';
+      default: return 'rgba(224, 122, 68, 0.3)';
     }
   };
 
@@ -28,45 +25,45 @@ export const AssistantVisualizer: React.FC<VisualizerProps> = ({ state, size = 2
       <motion.div
         className="absolute rounded-full pointer-events-none"
         style={{
-          width: size * 0.9,
-          height: size * 0.9,
-          background: `radial-gradient(circle, ${getGlowColor()} 0%, transparent 70%)`,
+          width: size * 1.1,
+          height: size * 1.1,
+          background: `radial-gradient(circle, ${getGlowColor()} 0%, transparent 68%)`,
         }}
         animate={{
-          scale: state === 'listening' ? [1, 1.25, 1.05] : state === 'speaking' ? [1, 1.15, 1] : [1, 1.05, 1],
-          opacity: state === 'idle' ? 0.35 : 0.8
+          scale: state === 'listening' ? [1, 1.25, 1.08] : state === 'speaking' ? [1, 1.18, 1] : [1, 1.05, 1],
+          opacity: state === 'idle' ? 0.45 : 0.95
         }}
         transition={{
-          duration: state === 'processing' ? 1.5 : 3,
+          duration: state === 'processing' ? 1.4 : 3,
           repeat: Infinity,
           ease: "easeInOut"
         }}
       />
 
-      {/* Outer Ring 1 - Dashed Orbital */}
+      {/* Outer Ring 1 - Dashed Orbital Ring */}
       <motion.div
-        className="absolute rounded-full border border-[#D97745]/30 border-dashed"
-        style={{ width: size * 0.85, height: size * 0.85 }}
+        className="absolute rounded-full border border-[#E07A44]/40 border-dashed"
+        style={{ width: size * 0.88, height: size * 0.88 }}
         animate={{
           rotate: 360,
-          scale: state === 'listening' ? 1.08 : 1
+          scale: state === 'listening' ? 1.06 : 1
         }}
         transition={{
-          rotate: { duration: state === 'processing' ? 8 : 24, repeat: Infinity, ease: "linear" },
-          scale: { duration: 0.4 }
+          rotate: { duration: state === 'processing' ? 6 : 22, repeat: Infinity, ease: "linear" },
+          scale: { duration: 0.3 }
         }}
       />
 
-      {/* Middle Ring 2 - Solid Accent with micro-dots */}
+      {/* Middle Ring 2 - Amber Ring */}
       <motion.div
-        className="absolute rounded-full border border-[#E8DCCD]"
-        style={{ width: size * 0.68, height: size * 0.68 }}
+        className="absolute rounded-full border border-[#383029]"
+        style={{ width: size * 0.72, height: size * 0.72 }}
         animate={{
           rotate: -360,
           scale: state === 'speaking' ? [1, 1.05, 0.98, 1.02] : 1
         }}
         transition={{
-          rotate: { duration: 32, repeat: Infinity, ease: "linear" },
+          rotate: { duration: 28, repeat: Infinity, ease: "linear" },
           scale: { duration: 1.2, repeat: Infinity }
         }}
       />
@@ -74,14 +71,14 @@ export const AssistantVisualizer: React.FC<VisualizerProps> = ({ state, size = 2
       {/* Active Waveform Rings for Speaking / Listening */}
       {state === 'speaking' && (
         <motion.div
-          className="absolute rounded-full border-2 border-[#D97745]/60"
-          style={{ width: size * 0.55, height: size * 0.55 }}
+          className="absolute rounded-full border-2 border-[#E07A44]/70"
+          style={{ width: size * 0.58, height: size * 0.58 }}
           animate={{
             scale: [1, 1.35, 1.5],
-            opacity: [0.8, 0.4, 0]
+            opacity: [0.9, 0.4, 0]
           }}
           transition={{
-            duration: 1.4,
+            duration: 1.3,
             repeat: Infinity,
             ease: "easeOut"
           }}
@@ -93,20 +90,20 @@ export const AssistantVisualizer: React.FC<VisualizerProps> = ({ state, size = 2
         onClick={onMicClick}
         whileHover={{ scale: 1.06 }}
         whileTap={{ scale: 0.95 }}
-        className="relative z-10 rounded-full flex flex-col items-center justify-center cursor-pointer shadow-xl transition-all duration-300 focus:outline-none"
+        className="relative z-10 rounded-full flex flex-col items-center justify-center cursor-pointer transition-all duration-300 focus:outline-none"
         style={{
-          width: size * 0.45,
-          height: size * 0.45,
+          width: size * 0.46,
+          height: size * 0.46,
           background: state === 'error'
-            ? 'linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)'
+            ? 'linear-gradient(135deg, #EF4444 0%, #991B1B 100%)'
             : state === 'listening'
-            ? 'linear-gradient(135deg, #D97745 0%, #B95F38 100%)'
-            : 'linear-gradient(135deg, #FFFDF9 0%, #F4E1D2 100%)',
-          border: '2px solid #E8DCCD',
-          boxShadow: '0 10px 25px -5px rgba(217, 119, 69, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.05)'
+            ? 'linear-gradient(135deg, #E07A44 0%, #C8622F 100%)'
+            : 'linear-gradient(135deg, #2A241F 0%, #1A1613 100%)',
+          border: '2px solid #383029',
+          boxShadow: '0 10px 30px -5px rgba(224, 122, 68, 0.35), inset 0 1px 1px rgba(255,255,255,0.1)'
         }}
       >
-        {/* Core State Display Icon / Wave */}
+        {/* State Display Icon / Wave */}
         {state === 'listening' ? (
           <div className="flex items-center gap-1">
             {[1, 2, 3, 4, 3, 2, 1].map((h, i) => (
@@ -123,7 +120,7 @@ export const AssistantVisualizer: React.FC<VisualizerProps> = ({ state, size = 2
             {[2, 4, 6, 8, 6, 4, 2].map((h, i) => (
               <motion.div
                 key={i}
-                className="w-1 bg-[#D97745] rounded-full"
+                className="w-1 bg-[#E07A44] rounded-full"
                 animate={{ height: [6, h * 4, 6] }}
                 transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.06 }}
               />
@@ -131,16 +128,16 @@ export const AssistantVisualizer: React.FC<VisualizerProps> = ({ state, size = 2
           </div>
         ) : state === 'processing' ? (
           <motion.div
-            className="w-8 h-8 rounded-full border-2 border-[#D97745] border-t-transparent"
+            className="w-8 h-8 rounded-full border-2 border-[#E07A44] border-t-transparent"
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
           />
         ) : (
           <div className="flex flex-col items-center">
-            <span className="font-serif-display text-xl font-bold text-[#B95F38] tracking-wider">
+            <span className="font-serif-display text-xl font-bold text-[#E07A44] tracking-wider">
               ECHO
             </span>
-            <span className="text-[10px] uppercase font-semibold text-[#81766B] tracking-widest mt-0.5">
+            <span className="text-[10px] uppercase font-semibold text-[#A89C90] tracking-widest mt-0.5">
               Ready
             </span>
           </div>

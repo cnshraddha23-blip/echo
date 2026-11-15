@@ -2,19 +2,21 @@
 
 @layer base {
   :root {
-    --bg-primary: #F8F1E7;
-    --bg-secondary: #EFE3D3;
-    --accent-primary: #D97745;
-    --accent-secondary: #B95F38;
-    --text-primary: #29241F;
-    --text-secondary: #81766B;
-    --card-bg: #FFFDF9;
-    --border-color: #E8DCCD;
-    --soft-orange: #F4E1D2;
-    --dark-theme-bg: #302820;
+    --bg-primary: #12100E;
+    --bg-secondary: #1C1815;
+    --card-bg: #221D19;
+    --card-border: #383029;
+    --accent-primary: #E07A44;
+    --accent-secondary: #C8622F;
+    --accent-glow: rgba(224, 122, 68, 0.25);
+    --text-primary: #FDFBF7;
+    --text-secondary: #A89C90;
+    --border-color: #2F2822;
   }
 
   body {
+    background-color: #14110E;
+    color: #FDFBF7;
     font-family: 'Inter', 'Manrope', system-ui, sans-serif;
   }
 
@@ -23,7 +25,7 @@
   }
 }
 
-/* Custom smooth scrollbar */
+/* Custom dark ambient glow scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -32,9 +34,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #E8DCCD;
+  background: #383029;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #D97745;
+  background: #E07A44;
 }
