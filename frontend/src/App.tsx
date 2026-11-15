@@ -23,7 +23,6 @@ export const App: React.FC = () => {
   const [userName, setUserName] = useState<string>('Shraddha');
   const [transcriptFeedback, setTranscriptFeedback] = useState<string>('');
 
-  // Prevent multiple concurrent triggers
   const isExecutingRef = useRef<boolean>(false);
 
   // Database Data States
@@ -118,13 +117,11 @@ export const App: React.FC = () => {
 
   // 3. User Voice Interaction
   const handleStartVoice = () => {
-    // If speaking, stop playback
     if (isSpeaking) {
       handleStopVoice();
       return;
     }
 
-    // Reset feedback
     setIsListening(true);
     setVisualizerState('listening');
     setTranscriptFeedback("Listening to your voice... Speak now.");
@@ -143,9 +140,9 @@ export const App: React.FC = () => {
         setVisualizerState('idle');
         const errString = String(error);
         if (errString.includes("not-allowed")) {
-          setTranscriptFeedback("Microphone permission denied in browser. Please click the mic icon in your address bar to allow.");
+          setTranscriptFeedback("Microphone permission denied. Allow mic access in your browser bar.");
         } else if (errString.includes("no-speech")) {
-          setTranscriptFeedback("No speech heard. Please tap and speak again.");
+          setTranscriptFeedback("No speech detected. Tap again or type in the input box.");
         } else {
           setTranscriptFeedback("Tap to speak again.");
         }
@@ -183,12 +180,10 @@ export const App: React.FC = () => {
     } finally {
       setIsSpeaking(false);
       setVisualizerState('idle');
-      setTranscriptFeedback('');
       isExecutingRef.current = false;
     }
   };
 
-  // Dedicated Voice Handler
   const handleVoiceCommand = async (text: string) => {
     const cleanText = text.trim();
     if (!cleanText || isExecutingRef.current) return;
@@ -215,7 +210,7 @@ export const App: React.FC = () => {
     } catch (err) {
       console.error("Voice command error:", err);
       setVisualizerState('error');
-      setTranscriptFeedback("Error communicating with Echo.");
+      setTranscriptFeedback("Error executing request.");
       setTimeout(() => {
         setVisualizerState('idle');
         setTranscriptFeedback('');
@@ -226,7 +221,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Dedicated Chat Send Handler (For typed messages)
   const handleSendMessage = async (text: string) => {
     const cleanText = text.trim();
     if (!cleanText) return;
@@ -325,6 +319,7 @@ export const App: React.FC = () => {
             onQuickAction={handleQuickAction}
             userName={userName}
             transcriptFeedback={transcriptFeedback}
+            onDirectPrompt={handleVoiceCommand}
           />
         )}
 

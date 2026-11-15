@@ -3,8 +3,6 @@ import {
   Sparkles, 
   Mic, 
   MicOff, 
-  Volume2, 
-  VolumeX, 
   Search, 
   Calendar, 
   Clock, 
@@ -15,7 +13,7 @@ import {
   HardDrive
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { AssistantVisualizer } from './AssistantVisualizer';
+import { Echo3DVisualizer } from './Echo3DVisualizer';
 import { Note, Task, Reminder, SystemTelemetry, AssistantVisualizerState } from '../types';
 
 interface DashboardProps {
@@ -32,6 +30,7 @@ interface DashboardProps {
   onQuickAction: (action: string) => void;
   userName: string;
   transcriptFeedback?: string;
+  onDirectPrompt?: (prompt: string) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -47,10 +46,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigate,
   onQuickAction,
   userName,
-  transcriptFeedback
+  transcriptFeedback,
+  onDirectPrompt
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
+  const [quickInput, setQuickInput] = useState<string>('');
 
   useEffect(() => {
     const updateTime = () => {
@@ -62,6 +63,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleQuickSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (quickInput.trim() && onDirectPrompt) {
+      onDirectPrompt(quickInput.trim());
+      setQuickInput('');
+    }
+  };
 
   const pendingTasks = tasks.filter(t => t.status === 'pending');
   const upcomingReminders = reminders.filter(r => r.status === 'pending');
@@ -100,12 +109,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </motion.div>
 
-      {/* 2. Central Hero: Visualizer & Real-Time Voice Interaction */}
+      {/* 2. Central Hero: 3D Aesthetic Visualizer & Interactive Voice Controls */}
       <motion.div 
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="bg-gradient-to-b from-[#FFFDF9] to-[#F8F1E7] border border-[#E8DCCD] rounded-3xl p-8 flex flex-col items-center justify-center relative overflow-hidden shadow-xs"
+        className="bg-gradient-to-b from-[#FFFDF9] via-[#FFFDF9] to-[#F8F1E7] border border-[#E8DCCD] rounded-3xl p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-xs"
       >
         <div className="absolute top-6 left-8 flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
@@ -113,15 +122,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#D97745]"></span>
           </span>
           <span className="text-xs font-semibold uppercase tracking-wider text-[#81766B]">
-            {visualizerState === 'listening' ? 'Listening to voice...' : visualizerState === 'speaking' ? 'Echo speaking...' : visualizerState === 'processing' ? 'Thinking...' : 'Ready'}
+            {visualizerState === 'listening' ? 'Listening...' : visualizerState === 'speaking' ? 'Speaking...' : visualizerState === 'processing' ? 'Thinking...' : 'Active Core'}
           </span>
         </div>
 
-        <div className="my-4">
-          <AssistantVisualizer 
+        {/* Real Three.js 3D Orb Visualizer */}
+        <div className="my-1">
+          <Echo3DVisualizer 
             state={visualizerState} 
-            size={240} 
-            onMicClick={isListening ? onStopVoice : onStartVoice}
+            onOrbClick={isListening ? onStopVoice : onStartVoice}
           />
         </div>
 
@@ -130,13 +139,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <motion.div 
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-4 px-4 py-2 bg-[#F4E1D2] border border-[#D97745]/30 rounded-xl text-xs font-medium text-[#B95F38] text-center max-w-md shadow-xs"
+            className="mb-4 px-5 py-2.5 bg-[#F4E1D2] border border-[#D97745]/30 rounded-xl text-xs font-medium text-[#B95F38] text-center max-w-lg shadow-xs"
           >
             {transcriptFeedback}
           </motion.div>
         )}
 
-        <div className="flex items-center gap-4 mt-2">
+        {/* Controls Ribbon */}
+        <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
           <button
             onClick={isListening ? onStopVoice : onStartVoice}
             className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl font-medium text-sm transition-all duration-300 shadow-md cursor-pointer ${
@@ -157,6 +167,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span>Interactive Chat</span>
           </button>
         </div>
+
+        {/* Quick Voice / Text Command Bar on Dashboard */}
+        <form onSubmit={handleQuickSubmit} className="w-full max-w-md mt-6 flex items-center gap-2">
+          <input
+            type="text"
+            value={quickInput}
+            onChange={(e) => setQuickInput(e.target.value)}
+            placeholder="Type a voice command or question here..."
+            className="flex-1 bg-[#F8F1E7] border border-[#E8DCCD] rounded-xl px-4 py-2.5 text-xs text-[#29241F] placeholder-[#81766B] focus:outline-none focus:border-[#D97745] transition-colors"
+          />
+          <button
+            type="submit"
+            className="px-4 py-2.5 bg-[#D97745] hover:bg-[#C26535] text-white rounded-xl text-xs font-medium transition-all shadow-xs"
+          >
+            Ask Echo
+          </button>
+        </form>
       </motion.div>
 
       {/* 3. Quick Actions Ribbon */}
