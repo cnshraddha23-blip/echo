@@ -23,10 +23,8 @@ export const App: React.FC = () => {
   const [userName, setUserName] = useState<string>('Shraddha');
   const [transcriptFeedback, setTranscriptFeedback] = useState<string>('');
 
-  // Lock refs to prevent duplicate message handling and double speech loops
-  const isHandlingMessageRef = useRef<boolean>(false);
-  const lastProcessedTextRef = useRef<string>('');
-  const lastProcessedTimeRef = useRef<number>(0);
+  // Prevent multiple concurrent triggers
+  const isExecutingRef = useRef<boolean>(false);
 
   // Database Data States
   const [messages, setMessages] = useState<Message[]>([]);
@@ -75,7 +73,7 @@ export const App: React.FC = () => {
     return () => clearInterval(telemetryInterval);
   }, []);
 
-  // 2. Real-Time Socket.IO Synchronization (Only update UI state)
+  // 2. Real-Time Socket.IO Synchronization
   useEffect(() => {
     socket.on('connect', () => {
       setIsConnected(true);
@@ -86,36 +84,6 @@ export const App: React.FC = () => {
       setIsConnected(false);
       setVisualizerState('idle');
       console.log("[SocketIO] Disconnected from Echo backend.");
-    });
-
-    socket.on('microphone_status', (data: { status: string }) => {
-      if (data.status === 'listening') {
-        setIsListening(true);
-        setVisualizerState('listening');
-      } else {
-        setIsListening(false);
-        if (visualizerState === 'listening') setVisualizerState('idle');
-      }
-    });
-
-    socket.on('assistant_speaking', () => {
-      setIsSpeaking(true);
-      setVisualizerState('speaking');
-    });
-
-    socket.on('assistant_stopped', () => {
-      setIsSpeaking(false);
-      setVisualizerState('idle');
-    });
-
-    socket.on('processing_started', () => {
-      setIsProcessing(true);
-      setVisualizerState('processing');
-    });
-
-    socket.on('processing_finished', () => {
-      setIsProcessing(false);
-      if (!isSpeaking) setVisualizerState('idle');
     });
 
     socket.on('notes_updated', async () => {
@@ -141,75 +109,68 @@ export const App: React.FC = () => {
     return () => {
       socket.off('connect');
       socket.off('disconnect');
-      socket.off('microphone_status');
-      socket.off('assistant_speaking');
-      socket.off('assistant_stopped');
-      socket.off('processing_started');
-      socket.off('processing_finished');
       socket.off('notes_updated');
       socket.off('tasks_updated');
       socket.off('reminders_updated');
       socket.off('reminder_triggered');
     };
-  }, [isSpeaking, visualizerState]);
+  }, []);
 
-  // 3. User Voice Interaction - Spoken Only (Does not write into chat section)
+  // 3. User Voice Interaction
   const handleStartVoice = () => {
+    // If speaking, stop playback
     if (isSpeaking) {
       handleStopVoice();
       return;
     }
 
+    // Reset feedback
     setIsListening(true);
     setVisualizerState('listening');
     setTranscriptFeedback("Listening to your voice... Speak now.");
 
-    if (browserVoice.isSupported()) {
-      browserVoice.startListening(
-        activeLanguage,
-        (interimText) => {
-          setTranscriptFeedback(`Listening: "${interimText}"`);
-        },
-        (finalTranscript) => {
-          setIsListening(false);
-          setVisualizerState('processing');
-          setTranscriptFeedback(`Heard: "${finalTranscript}"`);
-          handleVoiceCommand(finalTranscript);
-        },
-        (error) => {
-          console.warn("[Browser Speech Notice]:", error);
-          setIsListening(false);
-          setVisualizerState('idle');
-          setTranscriptFeedback("Microphone capture ended.");
-          setTimeout(() => setTranscriptFeedback(''), 2500);
-        },
-        () => {
-          setIsListening(false);
-          if (visualizerState === 'listening') setVisualizerState('idle');
-        }
-      );
-    } else {
-      api.startVoice(activeLanguage).catch((e) => {
-        console.error("Backend voice start failed:", e);
+    browserVoice.startListening(
+      activeLanguage,
+      (transcript) => {
+        setIsListening(false);
+        setVisualizerState('processing');
+        setTranscriptFeedback(`Heard: "${transcript}"`);
+        handleVoiceCommand(transcript);
+      },
+      (error) => {
+        console.warn("[Voice Error]:", error);
         setIsListening(false);
         setVisualizerState('idle');
-      });
-    }
+        const errString = String(error);
+        if (errString.includes("not-allowed")) {
+          setTranscriptFeedback("Microphone permission denied in browser. Please click the mic icon in your address bar to allow.");
+        } else if (errString.includes("no-speech")) {
+          setTranscriptFeedback("No speech heard. Please tap and speak again.");
+        } else {
+          setTranscriptFeedback("Tap to speak again.");
+        }
+        setTimeout(() => setTranscriptFeedback(''), 4000);
+      },
+      () => {
+        setIsListening(false);
+        if (!isProcessing && !isSpeaking) {
+          setVisualizerState('idle');
+        }
+      }
+    );
   };
 
-  const handleStopVoice = async () => {
+  const handleStopVoice = () => {
     browserVoice.stopListening();
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
     setIsListening(false);
     setIsSpeaking(false);
+    setIsProcessing(false);
     setVisualizerState('idle');
     setTranscriptFeedback('');
-    try {
-      await api.stopSpeaking();
-      await api.stopVoice();
-    } catch (err) {}
+    isExecutingRef.current = false;
   };
 
   const handleSpeakText = async (text: string) => {
@@ -223,53 +184,49 @@ export const App: React.FC = () => {
       setIsSpeaking(false);
       setVisualizerState('idle');
       setTranscriptFeedback('');
+      isExecutingRef.current = false;
     }
   };
 
-  // Pure Spoken Voice Handler: Speaks answer out loud without inserting into the chat section
+  // Dedicated Voice Handler
   const handleVoiceCommand = async (text: string) => {
     const cleanText = text.trim();
-    if (!cleanText) return;
+    if (!cleanText || isExecutingRef.current) return;
 
-    const now = Date.now();
-    if (
-      isHandlingMessageRef.current ||
-      (lastProcessedTextRef.current === cleanText && now - lastProcessedTimeRef.current < 1500)
-    ) {
-      return;
-    }
-
-    isHandlingMessageRef.current = true;
-    lastProcessedTextRef.current = cleanText;
-    lastProcessedTimeRef.current = now;
-
+    isExecutingRef.current = true;
     setIsProcessing(true);
     setVisualizerState('processing');
 
     try {
-      // Send command to backend router without recording in chat
       const res = await api.sendMessage(cleanText, 'voice-session', activeLanguage, false);
       
-      if (res.response) {
+      if (res && res.response) {
         setTranscriptFeedback(`Echo: "${res.response}"`);
         handleSpeakText(res.response);
+      } else {
+        setVisualizerState('idle');
+        isExecutingRef.current = false;
       }
 
-      if (res.action === 'create_note') {
+      if (res && res.action === 'create_note') {
         const updatedNotes = await api.getNotes();
         setNotes(updatedNotes || []);
       }
     } catch (err) {
       console.error("Voice command error:", err);
       setVisualizerState('error');
-      setTimeout(() => setVisualizerState('idle'), 2000);
+      setTranscriptFeedback("Error communicating with Echo.");
+      setTimeout(() => {
+        setVisualizerState('idle');
+        setTranscriptFeedback('');
+      }, 2500);
+      isExecutingRef.current = false;
     } finally {
       setIsProcessing(false);
-      isHandlingMessageRef.current = false;
     }
   };
 
-  // Chat Interface Handler: Used when typing messages into the chat composer
+  // Dedicated Chat Send Handler (For typed messages)
   const handleSendMessage = async (text: string) => {
     const cleanText = text.trim();
     if (!cleanText) return;
