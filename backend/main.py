@@ -15,18 +15,39 @@ from backend.services.scheduler_service import reminder_scheduler
 # Create python-socketio async server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 
+# Main asyncio event loop reference
+_main_loop = None
+
+def sio_emitter_adapter(event: str, data: dict):
+    global _main_loop
+    if _main_loop and not _main_loop.is_closed():
+        try:
+            asyncio.run_coroutine_threadsafe(sio.emit(event, data), _main_loop)
+        except Exception as e:
+            print(f"[SocketIO Emitter Threadsafe Exception]: {e}")
+    else:
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(sio.emit(event, data))
+        except RuntimeError:
+            pass
+
+set_sio_emitter(sio_emitter_adapter)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup actions
-    print(f"[*] Starting {settings.ASSISTANT_NAME} Backend Engine...")
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
+    
+    print(f"[*] Starting {settings.ASSISTANT_NAME} Backend Engine on main event loop...")
     reminder_scheduler.start()
     
     def on_reminder_triggered(reminder):
-        asyncio.create_task(sio.emit("reminder_triggered", reminder))
+        sio_emitter_adapter("reminder_triggered", reminder)
     reminder_scheduler.register_trigger_callback(on_reminder_triggered)
     
     def on_speech_event(event, data):
-        asyncio.create_task(sio.emit(event, data))
+        sio_emitter_adapter(event, data)
     speech_service.register_status_callback(on_speech_event)
 
     yield
@@ -48,15 +69,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Connect Socket.IO emitter to API routes
-def sio_emitter_adapter(event: str, data: dict):
-    try:
-        asyncio.create_task(sio.emit(event, data))
-    except Exception as e:
-        print(f"[SocketIO Emitter Exception]: {e}")
-
-set_sio_emitter(sio_emitter_adapter)
 
 # Mount REST API Routes
 app.include_router(api_router)

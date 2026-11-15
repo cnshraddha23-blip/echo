@@ -6,6 +6,7 @@ import { ProductivityPanel } from './components/ProductivityPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AboutPanel } from './components/AboutPanel';
 import { api, socket } from './services/api';
+import { browserVoice } from './services/voice';
 import { Note, Task, Reminder, SystemTelemetry, Message, AssistantVisualizerState } from './types';
 
 export const App: React.FC = () => {
@@ -19,7 +20,8 @@ export const App: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [activeLanguage, setActiveLanguage] = useState<string>('en-IN');
-  const [userName, setUserName] = useState<string>('Shivaraj');
+  const [userName, setUserName] = useState<string>('Shraddha');
+  const [transcriptFeedback, setTranscriptFeedback] = useState<string>('');
 
   // Database Data States
   const [messages, setMessages] = useState<Message[]>([]);
@@ -116,12 +118,12 @@ export const App: React.FC = () => {
 
     socket.on('speech_recognized', async (data: { text: string; language: string }) => {
       console.log("[SocketIO] Speech recognized:", data.text);
-      // Auto-send recognized speech to chat workflow
+      setTranscriptFeedback(`Heard: "${data.text}"`);
+      setTimeout(() => setTranscriptFeedback(''), 4000);
       handleSendMessage(data.text);
     });
 
     socket.on('assistant_response', async () => {
-      // Refresh chat messages
       const updated = await api.getMessages('default');
       setMessages(updated?.messages || []);
     });
@@ -163,22 +165,53 @@ export const App: React.FC = () => {
     };
   }, [isSpeaking, visualizerState]);
 
-  // 3. User Actions
-  const handleStartVoice = async () => {
+  // 3. Robust Hybrid Voice Trigger: Browser Web Speech API with Python Backend Fallback
+  const handleStartVoice = () => {
     setIsListening(true);
     setVisualizerState('listening');
-    try {
-      await api.startVoice(activeLanguage);
-    } catch (err) {
-      console.error("Failed to start voice listening:", err);
-      setIsListening(false);
-      setVisualizerState('idle');
+    setTranscriptFeedback("Listening to your voice... Speak now.");
+
+    if (browserVoice.isSupported()) {
+      browserVoice.startListening(
+        activeLanguage,
+        (transcript) => {
+          setIsListening(false);
+          setVisualizerState('processing');
+          setTranscriptFeedback(`Heard: "${transcript}"`);
+          setTimeout(() => setTranscriptFeedback(''), 3000);
+          handleSendMessage(transcript);
+        },
+        (error) => {
+          console.warn("[Browser Voice Error, falling back to backend mic]:", error);
+          // Fallback to Python PyAudio microphone capture
+          api.startVoice(activeLanguage).catch((e) => {
+            console.error("Backend voice failed:", e);
+            setIsListening(false);
+            setVisualizerState('idle');
+            setTranscriptFeedback("Microphone access unavailable.");
+            setTimeout(() => setTranscriptFeedback(''), 3000);
+          });
+        },
+        () => {
+          setIsListening(false);
+          if (visualizerState === 'listening') setVisualizerState('idle');
+        }
+      );
+    } else {
+      // Direct Python Backend Microphone trigger
+      api.startVoice(activeLanguage).catch((e) => {
+        console.error("Backend voice failed:", e);
+        setIsListening(false);
+        setVisualizerState('idle');
+      });
     }
   };
 
   const handleStopVoice = async () => {
+    browserVoice.stopListening();
     setIsListening(false);
     setVisualizerState('idle');
+    setTranscriptFeedback('');
     try {
       await api.stopVoice();
     } catch (err) {
@@ -191,7 +224,6 @@ export const App: React.FC = () => {
     setIsProcessing(true);
     setVisualizerState('processing');
 
-    // Optimistic user message append
     const optimisticUserMsg: Message = {
       conversation_id: 'default',
       role: 'user',
@@ -201,8 +233,9 @@ export const App: React.FC = () => {
     setMessages(prev => [...prev, optimisticUserMsg]);
 
     try {
+      // Send to backend with speak_response=true
       const res = await api.sendMessage(text, 'default', activeLanguage, true);
-      // Append assistant message
+      
       const assistantMsg: Message = {
         conversation_id: 'default',
         role: 'assistant',
@@ -211,7 +244,14 @@ export const App: React.FC = () => {
       };
       setMessages(prev => [...prev, assistantMsg]);
 
-      // If command was note or task, refresh states
+      // If speech synthesis is requested, play audio
+      if (res.response) {
+        setIsSpeaking(true);
+        setVisualizerState('speaking');
+        api.speakText(res.response, activeLanguage).catch(() => {});
+      }
+
+      // Refresh notes/tasks if command created one
       if (res.action === 'create_note') {
         const updatedNotes = await api.getNotes();
         setNotes(updatedNotes || []);
@@ -222,7 +262,9 @@ export const App: React.FC = () => {
       setTimeout(() => setVisualizerState('idle'), 2000);
     } finally {
       setIsProcessing(false);
-      if (!isSpeaking) setVisualizerState('idle');
+      setTimeout(() => {
+        if (!isSpeaking) setVisualizerState('idle');
+      }, 1500);
     }
   };
 
@@ -280,6 +322,7 @@ export const App: React.FC = () => {
             onNavigate={setActiveTab}
             onQuickAction={handleQuickAction}
             userName={userName}
+            transcriptFeedback={transcriptFeedback}
           />
         )}
 

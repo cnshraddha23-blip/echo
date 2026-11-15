@@ -31,6 +31,7 @@ interface DashboardProps {
   onNavigate: (tab: string) => void;
   onQuickAction: (action: string) => void;
   userName: string;
+  transcriptFeedback?: string;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -45,7 +46,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   telemetry,
   onNavigate,
   onQuickAction,
-  userName
+  userName,
+  transcriptFeedback
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -111,7 +113,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#D97745]"></span>
           </span>
           <span className="text-xs font-semibold uppercase tracking-wider text-[#81766B]">
-            {visualizerState === 'listening' ? 'Listening...' : visualizerState === 'speaking' ? 'Speaking...' : 'Ready'}
+            {visualizerState === 'listening' ? 'Listening to voice...' : visualizerState === 'speaking' ? 'Echo speaking...' : visualizerState === 'processing' ? 'Thinking...' : 'Ready'}
           </span>
         </div>
 
@@ -123,22 +125,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
           />
         </div>
 
+        {/* Live Audio Transcript Feedback Banner */}
+        {transcriptFeedback && (
+          <motion.div 
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 px-4 py-2 bg-[#F4E1D2] border border-[#D97745]/30 rounded-xl text-xs font-medium text-[#B95F38] text-center max-w-md shadow-xs"
+          >
+            {transcriptFeedback}
+          </motion.div>
+        )}
+
         <div className="flex items-center gap-4 mt-2">
           <button
             onClick={isListening ? onStopVoice : onStartVoice}
-            className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl font-medium text-sm transition-all duration-300 shadow-md ${
+            className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl font-medium text-sm transition-all duration-300 shadow-md cursor-pointer ${
               isListening
-                ? 'bg-[#B95F38] text-white hover:bg-[#A04F2E]'
+                ? 'bg-[#B95F38] text-white hover:bg-[#A04F2E] animate-pulse ring-4 ring-[#D97745]/30'
                 : 'bg-[#D97745] text-white hover:bg-[#C26535]'
             }`}
           >
             {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-            <span>{isListening ? "Stop Listening" : "Tap to Speak (Voice)"}</span>
+            <span>{isListening ? "Listening... (Tap to Cancel)" : "Tap to Speak (Voice)"}</span>
           </button>
 
           <button
             onClick={() => onNavigate('assistant')}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl font-medium text-sm bg-[#FFFDF9] border border-[#E8DCCD] text-[#29241F] hover:bg-[#EFE3D3] transition-colors"
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl font-medium text-sm bg-[#FFFDF9] border border-[#E8DCCD] text-[#29241F] hover:bg-[#EFE3D3] transition-colors cursor-pointer"
           >
             <Sparkles size={16} className="text-[#D97745]" />
             <span>Interactive Chat</span>
@@ -162,7 +175,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 + idx * 0.05 }}
               onClick={() => onQuickAction(item.action)}
-              className="flex items-center justify-between p-4 bg-[#FFFDF9] border border-[#E8DCCD] rounded-2xl hover:border-[#D97745] hover:shadow-xs transition-all text-left group"
+              className="flex items-center justify-between p-4 bg-[#FFFDF9] border border-[#E8DCCD] rounded-2xl hover:border-[#D97745] hover:shadow-xs transition-all text-left group cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-[#F4E1D2] text-[#D97745] group-hover:bg-[#D97745] group-hover:text-white transition-colors">
@@ -186,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-serif-display text-lg font-bold text-[#29241F]">Pending Tasks</h3>
-              <button onClick={() => onNavigate('tasks')} className="text-xs font-semibold text-[#D97745] hover:underline">
+              <button onClick={() => onNavigate('tasks')} className="text-xs font-semibold text-[#D97745] hover:underline cursor-pointer">
                 View All ({pendingTasks.length})
               </button>
             </div>
@@ -213,7 +226,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-serif-display text-lg font-bold text-[#29241F]">Reminders</h3>
-              <button onClick={() => onNavigate('reminders')} className="text-xs font-semibold text-[#D97745] hover:underline">
+              <button onClick={() => onNavigate('reminders')} className="text-xs font-semibold text-[#D97745] hover:underline cursor-pointer">
                 View All ({upcomingReminders.length})
               </button>
             </div>

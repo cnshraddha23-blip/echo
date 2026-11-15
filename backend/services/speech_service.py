@@ -24,7 +24,6 @@ class SpeechService:
         self.is_speaking = False
         self.stop_requested = False
         self.active_language = settings.DEFAULT_LANGUAGE  # 'en-IN' or 'kn-IN'
-        self._shared_mic = None
         self._status_callbacks = []
 
     def register_status_callback(self, cb: Callable[[str, Dict[str, Any]], None]):
@@ -34,16 +33,8 @@ class SpeechService:
         for cb in self._status_callbacks:
             try:
                 cb(event, data)
-            except Exception:
-                pass
-
-    def get_shared_mic(self) -> Optional[sr.Microphone]:
-        if self._shared_mic is None:
-            try:
-                self._shared_mic = sr.Microphone()
             except Exception as e:
-                print(f"[SpeechService] Microphone init error: {e}")
-        return self._shared_mic
+                print(f"[SpeechService Callback Error]: {e}")
 
     def stop_speech(self):
         """Immediately interrupts any playing speech audio."""
@@ -132,15 +123,12 @@ class SpeechService:
         Uses language 'en-IN' or 'kn-IN'.
         """
         lang = language or self.active_language
-        mic = self.get_shared_mic()
-        if not mic:
-            return {"success": False, "error": "No microphone available or accessible."}
 
         self.is_listening = True
         self._notify("microphone_status", {"status": "listening", "language": lang})
 
         try:
-            with mic as source:
+            with sr.Microphone() as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.4)
                 audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
 
