@@ -75,7 +75,7 @@ export const App: React.FC = () => {
     return () => clearInterval(telemetryInterval);
   }, []);
 
-  // 2. Real-Time Socket.IO Synchronization (Only update UI state, don't trigger duplicate speech)
+  // 2. Real-Time Socket.IO Synchronization (Only update UI state)
   useEffect(() => {
     socket.on('connect', () => {
       setIsConnected(true);
@@ -153,9 +153,8 @@ export const App: React.FC = () => {
     };
   }, [isSpeaking, visualizerState]);
 
-  // 3. User Voice Interaction
+  // 3. User Voice Interaction - Spoken Only (Does not write into chat section)
   const handleStartVoice = () => {
-    // If Echo is currently speaking, stop it first before listening
     if (isSpeaking) {
       handleStopVoice();
       return;
@@ -175,8 +174,7 @@ export const App: React.FC = () => {
           setIsListening(false);
           setVisualizerState('processing');
           setTranscriptFeedback(`Heard: "${finalTranscript}"`);
-          setTimeout(() => setTranscriptFeedback(''), 3000);
-          handleSendMessage(finalTranscript);
+          handleVoiceCommand(finalTranscript);
         },
         (error) => {
           console.warn("[Browser Speech Notice]:", error);
@@ -218,33 +216,63 @@ export const App: React.FC = () => {
     setIsSpeaking(true);
     setVisualizerState('speaking');
     try {
-      // Single voice audio source via browser speech synthesis to prevent echo/repeating
       await speakBrowserSpeech(text, activeLanguage);
     } catch (e) {
       console.error("Speak error:", e);
     } finally {
       setIsSpeaking(false);
       setVisualizerState('idle');
+      setTranscriptFeedback('');
     }
   };
 
-  const handleSendMessage = async (text: string) => {
+  // Pure Spoken Voice Handler: Speaks answer out loud without inserting into the chat section
+  const handleVoiceCommand = async (text: string) => {
     const cleanText = text.trim();
     if (!cleanText) return;
 
-    // Deduplication check: ignore if identical message was sent within 1.5 seconds
     const now = Date.now();
     if (
       isHandlingMessageRef.current ||
       (lastProcessedTextRef.current === cleanText && now - lastProcessedTimeRef.current < 1500)
     ) {
-      console.log("[App] Deduplicating message trigger:", cleanText);
       return;
     }
 
     isHandlingMessageRef.current = true;
     lastProcessedTextRef.current = cleanText;
     lastProcessedTimeRef.current = now;
+
+    setIsProcessing(true);
+    setVisualizerState('processing');
+
+    try {
+      // Send command to backend router without recording in chat
+      const res = await api.sendMessage(cleanText, 'voice-session', activeLanguage, false);
+      
+      if (res.response) {
+        setTranscriptFeedback(`Echo: "${res.response}"`);
+        handleSpeakText(res.response);
+      }
+
+      if (res.action === 'create_note') {
+        const updatedNotes = await api.getNotes();
+        setNotes(updatedNotes || []);
+      }
+    } catch (err) {
+      console.error("Voice command error:", err);
+      setVisualizerState('error');
+      setTimeout(() => setVisualizerState('idle'), 2000);
+    } finally {
+      setIsProcessing(false);
+      isHandlingMessageRef.current = false;
+    }
+  };
+
+  // Chat Interface Handler: Used when typing messages into the chat composer
+  const handleSendMessage = async (text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
 
     setIsProcessing(true);
     setVisualizerState('processing');
@@ -258,7 +286,6 @@ export const App: React.FC = () => {
     setMessages(prev => [...prev, optimisticUserMsg]);
 
     try {
-      // Speak response is handled on client only (speak_response: false to backend)
       const res = await api.sendMessage(cleanText, 'default', activeLanguage, false);
       
       const assistantMsg: Message = {
@@ -269,7 +296,6 @@ export const App: React.FC = () => {
       };
       setMessages(prev => [...prev, assistantMsg]);
 
-      // Speak response exactly once
       if (res.response) {
         handleSpeakText(res.response);
       }
@@ -284,7 +310,6 @@ export const App: React.FC = () => {
       setTimeout(() => setVisualizerState('idle'), 2000);
     } finally {
       setIsProcessing(false);
-      isHandlingMessageRef.current = false;
     }
   };
 
@@ -309,9 +334,9 @@ export const App: React.FC = () => {
       setActiveTab('tasks');
     } else if (action === 'google_search') {
       const q = prompt("Enter Google search query:");
-      if (q) api.sendMessage(`search for ${q}`, 'default', activeLanguage);
+      if (q) api.sendMessage(`search for ${q}`, 'voice-session', activeLanguage);
     } else if (action === 'study_mode') {
-      handleSendMessage("activate study mode");
+      handleVoiceCommand("activate study mode");
     }
   };
 
