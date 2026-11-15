@@ -13,7 +13,7 @@ import {
   HardDrive
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Echo3DVisualizer } from './Echo3DVisualizer';
+import { AssistantVisualizer } from './AssistantVisualizer';
 import { Note, Task, Reminder, SystemTelemetry, AssistantVisualizerState } from '../types';
 
 interface DashboardProps {
@@ -109,12 +109,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </motion.div>
 
-      {/* 2. Central Hero: 3D Aesthetic Visualizer & Interactive Voice Controls */}
+      {/* 2. Central Hero: Signature Echo Orb Visualizer */}
       <motion.div 
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="bg-gradient-to-b from-[#FFFDF9] via-[#FFFDF9] to-[#F8F1E7] border border-[#E8DCCD] rounded-3xl p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-xs"
+        className="bg-gradient-to-b from-[#FFFDF9] to-[#F8F1E7] border border-[#E8DCCD] rounded-3xl p-8 flex flex-col items-center justify-center relative overflow-hidden shadow-xs"
       >
         <div className="absolute top-6 left-8 flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
@@ -122,15 +122,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#D97745]"></span>
           </span>
           <span className="text-xs font-semibold uppercase tracking-wider text-[#81766B]">
-            {visualizerState === 'listening' ? 'Listening...' : visualizerState === 'speaking' ? 'Speaking...' : visualizerState === 'processing' ? 'Thinking...' : 'Active Core'}
+            {visualizerState === 'listening' ? 'Listening...' : visualizerState === 'speaking' ? 'Speaking...' : visualizerState === 'processing' ? 'Thinking...' : 'Ready'}
           </span>
         </div>
 
-        {/* Real Three.js 3D Orb Visualizer */}
-        <div className="my-1">
-          <Echo3DVisualizer 
+        {/* Clean Original Visualizer */}
+        <div className="my-4">
+          <AssistantVisualizer 
             state={visualizerState} 
-            onOrbClick={isListening ? onStopVoice : onStartVoice}
+            size={240} 
+            onMicClick={isListening ? onStopVoice : onStartVoice}
           />
         </div>
 
