@@ -80,9 +80,8 @@ async def process_chat(req: ChatRequest, background_tasks: BackgroundTasks):
         "data": cmd_res.get("data")
     })
     
-    # Speak if requested or if auto-speak is enabled in preferences
-    prefs = db.get_preferences()
-    if req.speak_response or prefs.get("auto_speak_responses") == "true":
+    # Speak only if explicitly requested by client call (speak_response=True)
+    if req.speak_response:
         background_tasks.add_task(speech_service.speak, resp_text, req.language)
         
     emit_event("processing_finished", {"status": "idle"})
