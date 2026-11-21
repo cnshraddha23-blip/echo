@@ -1,0 +1,5 @@
+python-socketio>=5.11.0
+requests>=2.32.0
+psutil>=6.0.0
+websocket-client>=1.8.0
+Pillow>=10.0.0

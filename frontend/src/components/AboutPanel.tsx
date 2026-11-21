@@ -61,7 +61,7 @@ export const AboutPanel: React.FC = () => {
       <div className="p-6 bg-gradient-to-r from-[#F4E1D2] to-[#EFE3D3] rounded-2xl border border-[#E8DCCD] flex items-center justify-between">
         <div>
           <h4 className="font-serif-display text-base font-bold text-[#29241F]">Principal Architect & Engineer</h4>
-          <p className="text-xs text-[#81766B]">Created by Shivaraj for Next-Generation Commercial AI Desktop Standard</p>
+          <p className="text-xs text-[#81766B]">Created by Shraddha for Next-Generation Commercial AI Desktop Standard</p>
         </div>
         <span className="text-xs font-bold text-[#B95F38] bg-white/80 px-3 py-1 rounded-lg">
           Version 2.0.0 Stable

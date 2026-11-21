@@ -12,19 +12,27 @@ from backend.config import settings
 class CommandRouter:
     """
     High-performance deterministic command router with bilingual (English & Kannada) support.
-    Routes to local tools first for zero-latency, falling back to generative AI when appropriate.
+    Strictly adheres to manual active language selection:
+    If English (en-IN), speaks and responds in English.
+    If Kannada (kn-IN), speaks and responds in Kannada.
+    Never switches languages automatically.
     """
 
     async def execute_command(self, query: str, conversation_id: str = "default", language: str = "en-IN") -> Dict[str, Any]:
         raw_query = query.strip()
-        q = raw_query.lower()
+        # Clean punctuation from end of speech recognition transcripts (e.g. "Open WhatsApp.")
+        q = raw_query.lower().strip(" .?!,:;\"'\n\r\t")
+        # Normalize common voice speech variations
+        q = q.replace("whats app", "whatsapp").replace("you tube", "youtube").replace("insta gram", "instagram")
+        is_kn = (language == "kn-IN")
 
         # 1. System / Exit / Stop Speaking commands
         if any(w in q for w in ["stop speaking", "be quiet", "shut up", "ಮಾತನಾಡಬೇಡ", "ನಿಲ್ಲಿಸು"]):
             db.log_command(raw_query, "voice_control", "success", "stopped speaking")
+            resp = "ನಾನು ಮಾತನಾಡುವುದನ್ನು ನಿಲ್ಲಿಸಿದ್ದೇನೆ." if is_kn else "I have stopped speaking."
             return {
                 "action": "stop_speaking",
-                "response": "I have stopped speaking.",
+                "response": resp,
                 "response_kn": "ನಾನು ಮಾತನಾಡುವುದನ್ನು ನಿಲ್ಲಿಸಿದ್ದೇನೆ.",
                 "type": "control"
             }
@@ -33,77 +41,99 @@ class CommandRouter:
         calc_match = re.search(r'(?:calculate|what is|compute|solve)?\s*([0-9\.\s\+\-\*\/\^\(\)\%\,]|sqrt|sin|cos|tan)+', q)
         if any(math_word in q for math_word in ["calculate", "compute", "solve", "divided by", "multiplied by", "plus", "minus"]) or (calc_match and any(op in q for op in ["+", "-", "*", "/", "^"])):
             try:
-                # Clean up query into expression
                 expr = q.replace("calculate", "").replace("what is", "").replace("compute", "").replace("solve", "")
                 expr = expr.replace("multiplied by", "*").replace("times", "*").replace("divided by", "/").replace("plus", "+").replace("minus", "-")
                 res = safe_eval_math(expr)
                 db.log_command(raw_query, "calculator", "success", f"result: {res}")
+                resp = f"ಉತ್ತರ {res}." if is_kn else f"The answer is {res}."
                 return {
                     "action": "calculate",
-                    "response": f"The answer is {res}.",
+                    "response": resp,
                     "response_kn": f"ಉತ್ತರ {res}.",
                     "data": {"expression": expr.strip(), "result": res},
                     "type": "calculator"
                 }
             except Exception:
-                pass # Proceed to other handlers if not a valid math expression
+                pass
 
-        # 3. Application Launching (e.g. "open notepad", "launch calculator", "open vs code")
-        open_match = re.search(r'(?:open|launch|start|ತೆರೆ|ಪ್ರಾರಂಭಿಸು)\s+([a-zA-Z\s]+)', q)
-        if open_match:
-            app_target = open_match.group(1).strip()
-            # Clean common filler words
-            app_target = app_target.replace("the ", "").replace("application", "").replace("app", "").strip()
-            res = app_automation.launch_app(app_target)
-            if res.get("success"):
-                db.log_command(raw_query, "app_launch", "success", app_target)
-                db.log_app_action(app_target, "launched")
-                return {
-                    "action": "app_launch",
-                    "response": res.get("message", f"Opened {app_target}."),
-                    "response_kn": f"{app_target} ಅನ್ನು ತೆರೆಯಲಾಗಿದೆ.",
-                    "data": res,
-                    "type": "automation"
-                }
+        # 3. Application & Platform Launching and Closing (Supports multi-app, popup, close)
+        app_cmd = app_automation.parse_app_command(q)
+        has_search_kw = any(w in q for w in ["search for", "and search for", "and search", "google for", "play", "ಹುಡುಕು"])
 
-        # 4. Application Closing (e.g. "close notepad", "terminate calc")
-        close_match = re.search(r'(?:close|exit|terminate|ಮುಚ್ಚು)\s+([a-zA-Z\s]+)', q)
-        if close_match:
-            app_target = close_match.group(1).strip().replace("the ", "").replace("application", "").replace("app", "").strip()
-            res = app_automation.close_app(app_target)
-            if res.get("success"):
-                db.log_command(raw_query, "app_close", "success", app_target)
-                db.log_app_action(app_target, "closed")
+        if (app_cmd["apps"] or app_cmd["is_close"]) and not has_search_kw:
+            if app_cmd["is_close"]:
+                targets = app_cmd["apps"] if app_cmd["apps"] else ["app"]
+                for t in targets:
+                    res = app_automation.close_app(t)
+                    db.log_command(raw_query, "app_close", "success", t)
+                    db.log_app_action(t, "closed")
+                
+                app_names = ", ".join([a.capitalize() for a in targets if a != "app"]) or "active application"
+                resp = f"{app_names} ಅನ್ನು ಮುಚ್ಚಲಾಗಿದೆ." if is_kn else f"Closed {app_names}."
                 return {
                     "action": "app_close",
-                    "response": res.get("message", f"Closed {app_target}."),
-                    "response_kn": f"{app_target} ಅನ್ನು ಮುಚ್ಚಲಾಗಿದೆ.",
-                    "data": res,
+                    "response": resp,
+                    "response_kn": f"{app_names} ಅನ್ನು ಮುಚ್ಚಲಾಗಿದೆ.",
+                    "data": {"closed_apps": targets},
+                    "type": "automation"
+                }
+            else:
+                app_results = []
+                popped_apps = []
+                new_apps = []
+                for t in app_cmd["apps"]:
+                    res = app_automation.launch_app(t)
+                    app_results.append(res)
+                    db.log_command(raw_query, "app_launch", "success", t)
+                    db.log_app_action(t, "launched")
+                    if res.get("popped_up"):
+                        popped_apps.append(t.capitalize())
+                    else:
+                        new_apps.append(t.capitalize())
+
+                all_apps = ", ".join([a.capitalize() for a in app_cmd["apps"]])
+                if is_kn:
+                    resp = f"{all_apps} ಅನ್ನು ತೆರೆಯಲಾಗುತ್ತಿದೆ."
+                else:
+                    if popped_apps and not new_apps:
+                        resp = f"{', '.join(popped_apps)} was already running; brought to front."
+                    elif popped_apps and new_apps:
+                        resp = f"Brought {', '.join(popped_apps)} to the front and opening {', '.join(new_apps)}."
+                    else:
+                        resp = f"Opening {all_apps}."
+                
+                return {
+                    "action": "app_launch",
+                    "response": resp,
+                    "response_kn": f"{all_apps} ಅನ್ನು ತೆರೆಯಲಾಗುತ್ತಿದೆ.",
+                    "data": {"apps": app_results, "mobile_intents": [app_automation.get_mobile_intent(a) for a in app_cmd["apps"] if app_automation.get_mobile_intent(a)]},
                     "type": "automation"
                 }
 
         # 5. Web Searches (Google / YouTube)
         if q.startswith("search for") or q.startswith("google") or "ಹುಡುಕು" in q:
-            search_term = q.replace("search for", "").replace("google", "").replace("ಹುಡುಕು", "").strip()
+            search_term = q.replace("search for", "").replace("google", "").replace("ಹುಡುಕು", "").strip(" .?!,")
             res = app_automation.open_web_search(search_term)
             db.log_command(raw_query, "web_search", "success", search_term)
+            resp = f"Google ನಲ್ಲಿ '{search_term}' ಹುಡುಕಲಾಗುತ್ತಿದೆ." if is_kn else f"Searching Google for '{search_term}'."
             return {
                 "action": "web_search",
-                "response": f"Searching Google for '{search_term}'",
-                "response_kn": f"Google ನಲ್ಲಿ '{search_term}' ಗಾಗಿ ಹುಡುಕಲಾಗುತ್ತಿದೆ",
+                "response": resp,
+                "response_kn": f"Google ನಲ್ಲಿ '{search_term}' ಹುಡುಕಲಾಗುತ್ತಿದೆ.",
                 "data": res,
                 "type": "web"
             }
 
-        if "youtube" in q and ("play" in q or "search" in q or "open" in q):
-            search_term = q.replace("play", "").replace("search", "").replace("youtube", "").replace("on", "").strip()
+        if "youtube" in q and any(w in q for w in ["play", "search"]):
+            search_term = q.replace("play", "").replace("search", "").replace("youtube", "").replace("on", "").replace("for", "").strip(" .?!,")
             if search_term:
                 res = app_automation.open_youtube_search(search_term)
                 db.log_command(raw_query, "youtube_search", "success", search_term)
+                resp = f"YouTube ನಲ್ಲಿ '{search_term}' ಹುಡುಕಲಾಗುತ್ತಿದೆ." if is_kn else f"Playing '{search_term}' on YouTube."
                 return {
                     "action": "youtube_search",
-                    "response": f"Searching YouTube for '{search_term}'",
-                    "response_kn": f"YouTube ನಲ್ಲಿ '{search_term}' ಗಾಗಿ ಹುಡುಕಲಾಗುತ್ತಿದೆ",
+                    "response": resp,
+                    "response_kn": f"YouTube ನಲ್ಲಿ '{search_term}' ಹುಡುಕಲಾಗುತ್ತಿದೆ.",
                     "data": res,
                     "type": "web"
                 }
@@ -115,10 +145,10 @@ class CommandRouter:
             ram = telemetry.get("memory", {}).get("percent", 0)
             bat = telemetry.get("battery", {})
             bat_str = f", Battery is at {bat['percent']}%" if bat else ""
-            msg = f"System CPU usage is at {cpu}%, RAM is at {ram}%{bat_str}."
+            resp = f"CPU ಬಳಕೆ {cpu}%, RAM ಬಳಕೆ {ram}%." if is_kn else f"System CPU usage is at {cpu}%, RAM is at {ram}%{bat_str}."
             return {
                 "action": "system_info",
-                "response": msg,
+                "response": resp,
                 "response_kn": f"CPU ಬಳಕೆ {cpu}%, RAM ಬಳಕೆ {ram}%.",
                 "data": telemetry,
                 "type": "system"
@@ -132,9 +162,10 @@ class CommandRouter:
             if weather_data.get("success"):
                 temp = weather_data.get("temp_c")
                 cond = weather_data.get("condition")
+                resp = f"{city} ನಲ್ಲಿ ಪ್ರಸ್ತುತ ಹವಾಮಾನ {cond} ಮತ್ತು ತಾಪಮಾನ {temp}°C ಆಗಿದೆ." if is_kn else f"The weather in {city.capitalize()} is currently {cond} with a temperature of {temp}°C."
                 return {
                     "action": "weather",
-                    "response": f"The weather in {city.capitalize()} is currently {cond} with a temperature of {temp}°C.",
+                    "response": resp,
                     "response_kn": f"{city} ನಲ್ಲಿ ಪ್ರಸ್ತುತ ಹವಾಮಾನ {cond} ಮತ್ತು ತಾಪಮಾನ {temp}°C ಆಗಿದೆ.",
                     "data": weather_data,
                     "type": "weather"
@@ -145,9 +176,10 @@ class CommandRouter:
             now = datetime.now()
             time_str = now.strftime("%I:%M %p")
             date_str = now.strftime("%A, %B %d, %Y")
+            resp = f"ಪ್ರಸ್ತುತ ಸಮಯ {time_str}, ದಿನಾಂಕ {date_str}." if is_kn else f"It is currently {time_str} on {date_str}."
             return {
                 "action": "time_date",
-                "response": f"It is currently {time_str} on {date_str}.",
+                "response": resp,
                 "response_kn": f"ಪ್ರಸ್ತುತ ಸಮಯ {time_str}, ದಿನಾಂಕ {date_str}.",
                 "data": {"time": time_str, "date": date_str},
                 "type": "info"
@@ -155,33 +187,34 @@ class CommandRouter:
 
         # 9. Notes Quick Command
         if q.startswith("note:") or q.startswith("save note") or q.startswith("take a note"):
-            note_content = q.replace("save note", "").replace("take a note", "").replace("note:", "").strip()
+            note_content = q.replace("save note", "").replace("take a note", "").replace("note:", "").strip(" .?!,")
             if note_content:
                 created = db.create_note(title=f"Note from {datetime.now().strftime('%b %d, %H:%M')}", content=note_content)
                 db.log_command(raw_query, "create_note", "success", note_content)
+                resp = f"ಟಿಪ್ಪಣಿ ಉಳಿಸಲಾಗಿದೆ: '{note_content}'" if is_kn else f"Note saved successfully: '{note_content}'"
                 return {
                     "action": "create_note",
-                    "response": f"Note saved successfully: '{note_content}'",
+                    "response": resp,
                     "response_kn": f"ಟಿಪ್ಪಣಿ ಉಳಿಸಲಾಗಿದೆ: '{note_content}'",
                     "data": created,
                     "type": "productivity"
                 }
 
-        # 10. Study Mode (Workflow activation)
+        # 10. Study Mode
         if "study mode" in q or "ಅಭ್ಯಾಸ ವಿಧಾನ" in q:
-            # Open configured study tools (Notepad, Browser, Calculator)
             app_automation.launch_app("notepad")
             app_automation.launch_app("calculator")
             pending_tasks = db.get_tasks(status="pending")
+            resp = f"ಅಭ್ಯಾಸ ವಿಧಾನ ಸಕ್ರಿಯಗೊಂಡಿದೆ! ನಿಮ್ಮ ನೋಟ್‌ಪ್ಯಾಡ್ ಮತ್ತು ಕ್ಯಾಲ್ಕುಲೇಟರ್ ತೆರೆಯಲಾಗಿದೆ." if is_kn else f"Study Mode activated! Opened your digital notepad and calculator. You have {len(pending_tasks)} pending tasks to review."
             return {
                 "action": "study_mode",
-                "response": f"Study Mode activated! Opened your digital notepad and calculator. You have {len(pending_tasks)} pending tasks to review.",
+                "response": resp,
                 "response_kn": f"ಅಭ್ಯಾಸ ವಿಧಾನ ಸಕ್ರಿಯಗೊಂಡಿದೆ! ನಿಮ್ಮ ನೋಟ್‌ಪ್ಯಾಡ್ ಮತ್ತು ಕ್ಯಾಲ್ಕುಲೇಟರ್ ತೆರೆಯಲಾಗಿದೆ.",
                 "data": {"pending_tasks_count": len(pending_tasks)},
                 "type": "study_mode"
             }
 
-        # 11. Conversational Fallback to AI Service
+        # 11. Conversational Fallback to AI Service (Strict manual active language)
         history = db.get_messages(conversation_id, limit=6)
         ai_resp = await ai_service.generate_response(raw_query, conversation_history=history, language=language)
         

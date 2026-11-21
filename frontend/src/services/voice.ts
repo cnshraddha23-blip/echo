@@ -58,18 +58,39 @@ export class BrowserVoiceRecognition {
     } catch (e) {}
 
     this.recognition.lang = language || 'en-IN';
+    this.recognition.interimResults = true;
     this.isListening = true;
 
     this.recognition.onstart = () => {
       this.isListening = true;
     };
 
+    let finalTranscript = '';
+
     this.recognition.onresult = (event: any) => {
-      this.isListening = false;
-      if (event.results && event.results[0] && event.results[0][0]) {
-        const transcript = event.results[0][0].transcript;
-        if (transcript && transcript.trim()) {
-          onResult(transcript.trim());
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+
+      const currentText = (finalTranscript || interim).trim();
+
+      // Barge-in interruption check
+      if (currentText.toLowerCase().includes("stop") || currentText.includes("ನಿಲ್ಲಿಸು")) {
+        this.stopListening();
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        onResult("stop");
+        return;
+      }
+
+      if (event.results[event.results.length - 1].isFinal) {
+        this.isListening = false;
+        if (currentText) {
+          onResult(currentText);
         }
       }
     };
@@ -126,7 +147,24 @@ export function speakBrowserSpeech(text: string, language = 'en-IN'): Promise<vo
       utterance.pitch = 1.0;
 
       const voices = window.speechSynthesis.getVoices();
-      const targetVoice = voices.find(v => v.lang.includes(language.split('-')[0]) || v.lang.includes('IN'));
+      let targetVoice: SpeechSynthesisVoice | undefined;
+
+      if (language.toLowerCase().startsWith('kn')) {
+        // Explicit Kannada voice lookup
+        targetVoice = voices.find(v => 
+          v.lang.toLowerCase().startsWith('kn') || 
+          v.name.toLowerCase().includes('kannada') ||
+          v.name.toLowerCase().includes('sapna')
+        );
+      } else {
+        // English voice lookup (prefer Indian English)
+        targetVoice = voices.find(v => 
+          v.lang.toLowerCase() === 'en-in' || 
+          v.name.toLowerCase().includes('neerja') || 
+          v.name.toLowerCase().includes('heera')
+        ) || voices.find(v => v.lang.toLowerCase().startsWith('en'));
+      }
+
       if (targetVoice) {
         utterance.voice = targetVoice;
       }

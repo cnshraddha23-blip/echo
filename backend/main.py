@@ -11,6 +11,7 @@ from backend.config import settings
 from backend.api.routes import router as api_router, set_sio_emitter
 from backend.services.speech_service import speech_service
 from backend.services.scheduler_service import reminder_scheduler
+from backend.services.device_service import device_service
 
 # Create python-socketio async server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
@@ -38,8 +39,9 @@ set_sio_emitter(sio_emitter_adapter)
 async def lifespan(app: FastAPI):
     global _main_loop
     _main_loop = asyncio.get_running_loop()
+    device_service.set_sio(sio)
     
-    print(f"[*] Starting {settings.ASSISTANT_NAME} Backend Engine on main event loop...")
+    print(f"[*] Starting {settings.ASSISTANT_NAME} Multi-Agent Cloud Brain on main event loop...")
     reminder_scheduler.start()
     
     def on_reminder_triggered(reminder):
@@ -50,13 +52,17 @@ async def lifespan(app: FastAPI):
         sio_emitter_adapter(event, data)
     speech_service.register_status_callback(on_speech_event)
 
+    from backend.services.visual_interaction import visual_engine
+    visual_engine.set_emitter(sio_emitter_adapter)
+
     yield
-    print(f"[*] Shutting down {settings.ASSISTANT_NAME} Backend Engine...")
+    print(f"[*] Shutting down {settings.ASSISTANT_NAME} Engine...")
     reminder_scheduler.stop()
     speech_service.stop_speech()
+    visual_engine.cancel_active_task()
 
 app = FastAPI(
-    title=f"{settings.ASSISTANT_NAME} AI Assistant",
+    title=f"{settings.ASSISTANT_NAME} AI Multi-Agent Operating System",
     version="2.0.0",
     lifespan=lifespan
 )
@@ -74,9 +80,12 @@ app.add_middleware(
 app.include_router(api_router)
 
 # Mount Static Frontend Build if present
-dist_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
-if os.path.exists(dist_folder):
-    app.mount("/", StaticFiles(directory=dist_folder, html=True), name="frontend")
+static_folder = os.path.join(os.path.dirname(__file__), "static")
+if not os.path.exists(static_folder):
+    static_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+
+if os.path.exists(static_folder):
+    app.mount("/", StaticFiles(directory=static_folder, html=True), name="frontend")
 
 # Mount Socket.IO to ASGI application
 combined_asgi_app = socketio.ASGIApp(sio, other_asgi_app=app)
@@ -93,6 +102,41 @@ async def connect(sid, environ):
 @sio.event
 async def disconnect(sid):
     print(f"[Socket.IO] Client disconnected: {sid}")
+    device_service.on_device_disconnect(sid)
+
+@sio.on("companion_handshake")
+async def on_companion_handshake(sid, data):
+    """Authenticated Companion registers its socket connection."""
+    device_id = data.get("device_id", f"dev_{sid[:8]}")
+    name = data.get("name", "Companion Device")
+    os_name = data.get("os", "Windows")
+    capabilities = data.get("capabilities", [])
+    version = data.get("version", "2.0.0")
+    device_service.on_device_connect(sid, device_id, name, os_name, capabilities, version)
+    await sio.emit("companion_ack", {"status": "authenticated", "device_id": device_id}, to=sid)
+
+@sio.on("companion_command_result")
+async def on_companion_command_result(sid, data):
+    cmd_id = data.get("command_id")
+    status = data.get("status", "completed")
+    result = data.get("result", {})
+    device_service.handle_command_result(cmd_id, status, result)
+
+@sio.on("cancel_task")
+async def on_cancel_task(sid, data=None):
+    from backend.services.visual_interaction import visual_engine
+    print(f"[Socket.IO] Interrupt/Cancel requested from client {sid}")
+    speech_service.stop_speech()
+    visual_engine.cancel_active_task()
+    await sio.emit("task_cancelled", {"status": "cancelled", "by": sid})
+
+@sio.on("start_visual_loop")
+async def on_start_visual_loop(sid, data):
+    from backend.services.visual_interaction import visual_engine
+    goal = data.get("goal", "Inspect current computer screen")
+    max_steps = data.get("max_steps", 3)
+    print(f"[Socket.IO] Starting visual interaction loop for goal: '{goal}'")
+    asyncio.create_task(visual_engine.execute_visual_loop(goal, max_steps=max_steps))
 
 if __name__ == "__main__":
     uvicorn.run("backend.main:combined_asgi_app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG)

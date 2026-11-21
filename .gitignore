@@ -48,3 +48,5 @@ build/
 *.swo
 Thumbs.db
 Desktop.ini
+app.tar.gz
+backup_*/

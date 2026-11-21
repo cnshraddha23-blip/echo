@@ -39,3 +39,22 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #C27038;
 }
+
+/* Custom Animated Cursor Behavior */
+@media (pointer: fine) {
+  html.has-custom-cursor,
+  html.has-custom-cursor body,
+  html.has-custom-cursor a,
+  html.has-custom-cursor button,
+  html.has-custom-cursor [role="button"],
+  html.has-custom-cursor .cursor-pointer {
+    cursor: none !important;
+  }
+
+  html.has-custom-cursor input[type="text"],
+  html.has-custom-cursor textarea,
+  html.has-custom-cursor [contenteditable="true"] {
+    cursor: text !important;
+  }
+}
+

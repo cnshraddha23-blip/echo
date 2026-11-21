@@ -3,16 +3,25 @@ import re
 import threading
 import time
 from typing import Optional, Callable, Dict, Any
-import pyttsx3
-import speech_recognition as sr
+try:
+    import pyttsx3
+except ImportError:
+    pyttsx3 = None
+try:
+    import speech_recognition as sr
+except ImportError:
+    sr = None
 from backend.config import settings
 
 class SpeechService:
     def __init__(self):
-        self.recognizer = sr.Recognizer()
-        self.recognizer.energy_threshold = 300
-        self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold = 0.8
+        if sr is not None:
+            self.recognizer = sr.Recognizer()
+            self.recognizer.energy_threshold = 300
+            self.recognizer.dynamic_energy_threshold = True
+            self.recognizer.pause_threshold = 0.8
+        else:
+            self.recognizer = None
         
         self.is_listening = False
         self.is_speaking = False
@@ -52,10 +61,11 @@ class SpeechService:
         self._notify("assistant_speaking", {"text": clean_text})
 
         try:
-            engine = pyttsx3.init()
-            engine.setProperty('rate', 170)
-            engine.say(clean_text)
-            engine.runAndWait()
+            if pyttsx3 is not None:
+                engine = pyttsx3.init()
+                engine.setProperty('rate', 170)
+                engine.say(clean_text)
+                engine.runAndWait()
         except Exception as err:
             print(f"[SpeechService pyttsx3 error]: {err}")
         finally:
@@ -63,6 +73,9 @@ class SpeechService:
             self._notify("assistant_status", {"status": "idle"})
 
     def capture_audio(self, timeout: int = 5, phrase_time_limit: int = 10, language: Optional[str] = None) -> Dict[str, Any]:
+        if not sr or not self.recognizer:
+            return {"success": False, "error": "Microphone audio recognition not available on cloud host"}
+
         lang = language or self.active_language
         self.is_listening = True
         self._notify("microphone_status", {"status": "listening", "language": lang})

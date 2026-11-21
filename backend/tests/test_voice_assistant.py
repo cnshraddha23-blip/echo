@@ -60,3 +60,36 @@ def test_app_allowlist_security():
 def test_translation():
     t = quick_translate("hello", "en", "kn")
     assert "ನಮಸ್ಕಾರ" in t["translated"]
+
+from unittest.mock import patch
+
+@pytest.mark.asyncio
+async def test_apps_launch_integration():
+    with patch("webbrowser.open"), patch("os.system", return_value=0):
+        for target in ["whatsapp", "spotify", "instagram", "youtube", "browser"]:
+            res = await command_router.execute_command(f"Open {target}.", language="en-IN")
+            assert res["action"] == "app_launch"
+            assert res["type"] == "automation"
+            assert f"Opening {target.capitalize()}." in res["response"]
+
+@pytest.mark.asyncio
+async def test_apps_launch_kannada():
+    with patch("webbrowser.open"), patch("os.system", return_value=0):
+        res = await command_router.execute_command("Open WhatsApp.", language="kn-IN")
+        assert res["action"] == "app_launch"
+        assert "ತೆರೆಯಲಾಗುತ್ತಿದೆ" in res["response"]
+
+@pytest.mark.asyncio
+async def test_manual_language_switch_no_auto_switch():
+    res_en = await command_router.execute_command("who are you", language="en-IN")
+    assert "Echo" in res_en["response"]
+
+    res_kn = await command_router.execute_command("ಯಾರು ನೀವು", language="kn-IN")
+    assert "ಎಕೋ" in res_kn["response"] or "ಸಹಾಯಕ" in res_kn["response"]
+
+@pytest.mark.asyncio
+async def test_direct_gk_no_boilerplate():
+    res = await command_router.execute_command("what is the capital of France?")
+    assert "Paris" in res["response"]
+    assert "I understand you're asking about" not in res["response"]
+    assert "I understand you are asking about" not in res["response"]
